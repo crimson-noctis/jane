@@ -1,4 +1,5 @@
 use crate::token::Token;
+use crate::token::TokenKind;
 
 pub struct Scanner {
     source: Vec<char>,
@@ -29,30 +30,28 @@ impl Scanner {
         }
 
         let token = match ch {
-            '0' => Token::new(crate::token::TokenKind::Zero),
-            'S' => Token::new(crate::token::TokenKind::Successor),
-            'a' => Token::new(crate::token::TokenKind::VarA),
-            'b' => Token::new(crate::token::TokenKind::VarB),
-            'c' => Token::new(crate::token::TokenKind::VarC),
-            'd' => Token::new(crate::token::TokenKind::VarD),
-            'e' => Token::new(crate::token::TokenKind::VarE),
-            '\'' => Token::new(crate::token::TokenKind::Apostrophe),
-            '(' => Token::new(crate::token::TokenKind::LeftParen),
-            ')' => Token::new(crate::token::TokenKind::RightParen),
-            ':' => Token::new(crate::token::TokenKind::Colon),
-            '[' => Token::new(crate::token::TokenKind::LeftBracket),
-            ']' => Token::new(crate::token::TokenKind::RightBracket),
-            '+' => Token::new(crate::token::TokenKind::Plus),
-            '-' => Token::new(crate::token::TokenKind::Minus),
-            '=' => Token::new(crate::token::TokenKind::Equals),
-            '<' => Token::new(crate::token::TokenKind::LessThan),
-            '>' => Token::new(crate::token::TokenKind::GreaterThan),
-            '~' => Token::new(crate::token::TokenKind::Not),
-            '&' => Token::new(crate::token::TokenKind::And),
-            '|' => Token::new(crate::token::TokenKind::Or),
-            '?' => Token::new(crate::token::TokenKind::Implies),
-            'A' => Token::new(crate::token::TokenKind::ForAll),
-            '\n' => Token::new(crate::token::TokenKind::EOF),
+            '0' => Token::new(TokenKind::Zero),
+            'S' => Token::new(TokenKind::Successor),
+            '\'' => Token::new(TokenKind::Apostrophe),
+            '(' => Token::new(TokenKind::LeftParen),
+            ')' => Token::new(TokenKind::RightParen),
+            ':' => Token::new(TokenKind::Colon),
+            '[' => Token::new(TokenKind::LeftBracket),
+            ']' => Token::new(TokenKind::RightBracket),
+            '+' => Token::new(TokenKind::Plus),
+            '-' => Token::new(TokenKind::Minus),
+            '=' => Token::new(TokenKind::Equals),
+            '<' => Token::new(TokenKind::LessThan),
+            '>' => Token::new(TokenKind::GreaterThan),
+            '~' => Token::new(TokenKind::Not),
+            '&' => Token::new(TokenKind::And),
+            '|' => Token::new(TokenKind::Or),
+            '?' => Token::new(TokenKind::Implies),
+            'A' => Token::new(TokenKind::ForAll),
+            '\n' => Token::new(TokenKind::EOF),
+
+            ch if ch.is_ascii_lowercase() => Token::new(TokenKind::Identifier(ch)),
+
             _ => return Err(format!("Unrecognized token or invalid expression: {ch}")),
         };
 

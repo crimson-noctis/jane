@@ -1,4 +1,4 @@
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Token {
     kind: TokenKind,
 }
@@ -9,18 +9,14 @@ impl Token {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum TokenKind {
     // Numerals
     Zero,
     Successor,
 
     // Variables
-    VarA,
-    VarB,
-    VarC,
-    VarD,
-    VarE,
+    Identifier(char),
 
     // Punctuation
     Apostrophe,
