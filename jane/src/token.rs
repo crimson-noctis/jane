@@ -45,6 +45,9 @@ pub enum TokenKind {
     Exists,
     ForAll,
 
+    // Whitespace
+    Whitespace,
+
     // End of File
     EOF,
 }

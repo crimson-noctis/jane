@@ -51,7 +51,7 @@ impl Scanner {
             '|' => Token::new(crate::token::TokenKind::Or),
             '?' => Token::new(crate::token::TokenKind::Implies),
             'A' => Token::new(crate::token::TokenKind::ForAll),
-
+            ' ' => Token::new(crate::token::TokenKind::Whitespace),
             '\n' => Token::new(crate::token::TokenKind::EOF),
             _ => panic!("Invalid or Unregonized Token {ch}"),
         }
