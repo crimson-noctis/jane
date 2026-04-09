@@ -1,4 +1,4 @@
-use std::fmt::Display;
+use std::{fmt::Display, num::FpCategory};
 
 pub enum Term {
     Zero,
@@ -86,8 +86,8 @@ impl Display for Formula {
             Self::And { left, right } => write!(f, "({} ∧ {})", left, right),
             Self::Or { left, right } => write!(f, "({} ∨ {})", left, right),
             Self::Implies { left, right } => write!(f, "({} -> {})", left, right),
-            Self::Exists { var, body } => write!(f, "(∀{}:{})", var, body),
-            Self::Forall { var, body } => write!(f, "(∃{}:{})", var, body),
+            Self::Exists { var, body } => write!(f, "(∀{}: {})", var, body),
+            Self::Forall { var, body } => write!(f, "(∃{}: {})", var, body),
         }
     }
 }
@@ -134,6 +134,143 @@ fn new_forall(var: char, body: Formula) -> Formula {
     Formula::Forall {
         var,
         body: Box::new(body),
+    }
+}
+
+fn intro_conjunction(p: Formula, q: Formula) -> Formula {
+    new_and(p, q)
+}
+
+enum Choice {
+    Left,
+    Right,
+}
+
+fn elim_conjunction(f: Formula, n: Choice) -> Result<Formula, String> {
+    if let Formula::And { left, right } = f {
+        match n {
+            Choice::Left => Ok(*left),
+            Choice::Right => Ok(*right),
+        }
+    } else {
+        Err("Elim conjunction: Formula f must be in the form (p ∧ q)".to_string())
+    }
+}
+
+fn intro_implication() {
+    todo!();
+}
+
+fn term_equal(a: Term, b: Term) -> bool {
+    match (a, b) {
+        (Term::Zero, Term::Zero) => true,
+        (Term::Var { var: var_a }, Term::Var { var: var_b }) => var_a == var_b,
+        (Term::Succ { child: child_a }, Term::Succ { child: child_b }) => {
+            term_equal(*child_a, *child_b)
+        }
+        (
+            Term::Sum {
+                left: left_a,
+                right: right_a,
+            },
+            Term::Sum {
+                left: left_b,
+                right: right_b,
+            },
+        ) => term_equal(*left_a, *left_b) && term_equal(*right_a, *right_b),
+        (
+            Term::Product {
+                left: left_a,
+                right: right_a,
+            },
+            Term::Product {
+                left: left_b,
+                right: right_b,
+            },
+        ) => term_equal(*left_a, *left_b) && term_equal(*right_a, *right_b),
+        _ => false,
+    }
+}
+
+fn formula_equal(a: Formula, b: Formula) -> bool {
+    match (a, b) {
+        (
+            Formula::Atom {
+                left: left_a,
+                right: right_a,
+            },
+            Formula::Atom {
+                left: left_b,
+                right: right_b,
+            },
+        ) => term_equal(left_a, left_b) && term_equal(right_a, right_b),
+
+        (Formula::Negation { child: child_a }, Formula::Negation { child: child_b }) => {
+            formula_equal(*child_a, *child_b)
+        }
+        (
+            Formula::And {
+                left: left_a,
+                right: right_a,
+            },
+            Formula::And {
+                left: left_b,
+                right: right_b,
+            },
+        )
+        | (
+            Formula::Or {
+                left: left_a,
+                right: right_a,
+            },
+            Formula::Or {
+                left: left_b,
+                right: right_b,
+            },
+        )
+        | (
+            Formula::Implies {
+                left: left_a,
+                right: right_a,
+            },
+            Formula::Implies {
+                left: left_b,
+                right: right_b,
+            },
+        ) => formula_equal(*left_a, *left_b) && formula_equal(*right_a, *right_b),
+        (
+            Formula::Exists {
+                var: var_a,
+                body: body_a,
+            },
+            Formula::Exists {
+                var: var_b,
+                body: body_b,
+            },
+        )
+        | (
+            Formula::Forall {
+                var: var_a,
+                body: body_a,
+            },
+            Formula::Forall {
+                var: var_b,
+                body: body_b,
+            },
+        ) => var_a == var_b && formula_equal(*body_a, *body_b),
+        _ => false,
+    }
+}
+
+fn elim_implication(p: Formula, f: Formula) -> Result<Formula, String> {
+    if let Formula::Implies { left, right } = f {
+        if formula_equal(p, *left) {
+            Ok(*right)
+        } else {
+            Err("Elim implies: Premise does not match antecedent".to_string())
+        }
+    } else {
+        Err("Elim implies: Formula f is not an implication".to_string())
     }
 }
 
