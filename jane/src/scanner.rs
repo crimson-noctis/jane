@@ -76,7 +76,7 @@ mod tests {
 
     #[test]
     fn test_token() {
-        let mut scanner = Scanner::new("Hello".to_string());
+        let mut scanner = Scanner::new("SS0".to_string());
 
         scanner.scan_tokens();
 
