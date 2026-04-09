@@ -20,6 +20,34 @@ impl Display for Term {
     }
 }
 
+fn new_zero() -> Term {
+    Term::Zero
+}
+
+fn new_var(var: char) -> Term {
+    Term::Var { var }
+}
+
+fn new_succ(child: Term) -> Term {
+    Term::Succ {
+        child: Box::new(child),
+    }
+}
+
+fn new_sum(left: Term, right: Term) -> Term {
+    Term::Sum {
+        left: Box::new(left),
+        right: Box::new(right),
+    }
+}
+
+fn new_product(left: Term, right: Term) -> Term {
+    Term::Product {
+        left: Box::new(left),
+        right: Box::new(right),
+    }
+}
+
 pub enum Formula {
     Atom {
         left: Term,
@@ -64,9 +92,57 @@ impl Display for Formula {
     }
 }
 
+fn new_atom(left: Term, right: Term) -> Formula {
+    Formula::Atom { left, right }
+}
+
+fn new_negation(child: Formula) -> Formula {
+    Formula::Negation {
+        child: Box::new(child),
+    }
+}
+
+fn new_and(left: Formula, right: Formula) -> Formula {
+    Formula::And {
+        left: Box::new(left),
+        right: Box::new(right),
+    }
+}
+
+fn new_or(left: Formula, right: Formula) -> Formula {
+    Formula::Or {
+        left: Box::new(left),
+        right: Box::new(right),
+    }
+}
+
+fn new_implies(left: Formula, right: Formula) -> Formula {
+    Formula::Implies {
+        left: Box::new(left),
+        right: Box::new(right),
+    }
+}
+
+fn new_exists(var: char, body: Formula) -> Formula {
+    Formula::Exists {
+        var,
+        body: Box::new(body),
+    }
+}
+
+fn new_forall(var: char, body: Formula) -> Formula {
+    Formula::Forall {
+        var,
+        body: Box::new(body),
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    use crate::ast::Formula;
     use crate::ast::Term;
+    use crate::ast::new_atom;
+    use crate::ast::new_var;
 
     #[test]
     fn test_print_zero() {
