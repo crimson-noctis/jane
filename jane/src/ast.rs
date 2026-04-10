@@ -1,5 +1,6 @@
 use std::{fmt::Display, num::FpCategory};
 
+#[derive(Debug, PartialEq)]
 pub enum Term {
     Zero,
     Var { var: char },
@@ -48,6 +49,7 @@ fn new_product(left: Term, right: Term) -> Term {
     }
 }
 
+#[derive(Debug, PartialEq)]
 pub enum Formula {
     Atom {
         left: Term,
@@ -162,104 +164,11 @@ fn intro_implication() {
 }
 
 fn term_equal(a: Term, b: Term) -> bool {
-    match (a, b) {
-        (Term::Zero, Term::Zero) => true,
-        (Term::Var { var: var_a }, Term::Var { var: var_b }) => var_a == var_b,
-        (Term::Succ { child: child_a }, Term::Succ { child: child_b }) => {
-            term_equal(*child_a, *child_b)
-        }
-        (
-            Term::Sum {
-                left: left_a,
-                right: right_a,
-            },
-            Term::Sum {
-                left: left_b,
-                right: right_b,
-            },
-        ) => term_equal(*left_a, *left_b) && term_equal(*right_a, *right_b),
-        (
-            Term::Product {
-                left: left_a,
-                right: right_a,
-            },
-            Term::Product {
-                left: left_b,
-                right: right_b,
-            },
-        ) => term_equal(*left_a, *left_b) && term_equal(*right_a, *right_b),
-        _ => false,
-    }
+    a == b
 }
 
 fn formula_equal(a: Formula, b: Formula) -> bool {
-    match (a, b) {
-        (
-            Formula::Atom {
-                left: left_a,
-                right: right_a,
-            },
-            Formula::Atom {
-                left: left_b,
-                right: right_b,
-            },
-        ) => term_equal(left_a, left_b) && term_equal(right_a, right_b),
-
-        (Formula::Negation { child: child_a }, Formula::Negation { child: child_b }) => {
-            formula_equal(*child_a, *child_b)
-        }
-        (
-            Formula::And {
-                left: left_a,
-                right: right_a,
-            },
-            Formula::And {
-                left: left_b,
-                right: right_b,
-            },
-        )
-        | (
-            Formula::Or {
-                left: left_a,
-                right: right_a,
-            },
-            Formula::Or {
-                left: left_b,
-                right: right_b,
-            },
-        )
-        | (
-            Formula::Implies {
-                left: left_a,
-                right: right_a,
-            },
-            Formula::Implies {
-                left: left_b,
-                right: right_b,
-            },
-        ) => formula_equal(*left_a, *left_b) && formula_equal(*right_a, *right_b),
-        (
-            Formula::Exists {
-                var: var_a,
-                body: body_a,
-            },
-            Formula::Exists {
-                var: var_b,
-                body: body_b,
-            },
-        )
-        | (
-            Formula::Forall {
-                var: var_a,
-                body: body_a,
-            },
-            Formula::Forall {
-                var: var_b,
-                body: body_b,
-            },
-        ) => var_a == var_b && formula_equal(*body_a, *body_b),
-        _ => false,
-    }
+    a == b
 }
 
 fn elim_implication(p: Formula, f: Formula) -> Result<Formula, String> {
@@ -274,10 +183,77 @@ fn elim_implication(p: Formula, f: Formula) -> Result<Formula, String> {
     }
 }
 
+fn intro_symmetry(p: Formula) -> Result<Formula, String> {
+    if let Formula::Atom { left, right } = p {
+        Ok(Formula::Atom { right, left })
+    } else {
+        Err("Symmetry: Formula must be an atom of the form (p = q)".to_string())
+    }
+}
+
+fn intro_transitivity(p: Formula, q: Formula) -> Result<Formula, String> {
+    if let (
+        Formula::Atom {
+            left: p_left,
+            right: p_right,
+        },
+        Formula::Atom {
+            left: q_left,
+            right: q_right,
+        },
+    ) = (p, q)
+    {
+        if p_right == q_left {
+            Ok(Formula::Atom {
+                left: p_left,
+                right: q_right,
+            })
+        } else {
+            Err("Transitivity: The RHS of p and the LHS of q are not equal".to_string())
+        }
+    } else {
+        Err("Transivity: Formula p and q must be an atom of the form (p = q)".to_string())
+    }
+}
+
+fn intro_succ(p: Formula) -> Result<Formula, String> {
+    if let Formula::Atom { left, right } = p {
+        Ok(Formula::Atom {
+            left: Term::Succ {
+                child: Box::new(left),
+            },
+            right: Term::Succ {
+                child: Box::new(right),
+            },
+        })
+    } else {
+        Err("Fail".to_string())
+    }
+}
+
+fn elim_succ(p: Formula) -> Result<Formula, String> {
+    if let Formula::Atom {
+        left: Term::Succ { child: left_child },
+        right: Term::Succ { child: right_child },
+    } = p
+    {
+        Ok(Formula::Atom {
+            left: *left_child,
+            right: *right_child,
+        })
+    } else {
+        Err("Fail".to_string())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::ast::Formula;
     use crate::ast::Term;
+    use crate::ast::elim_succ;
+    use crate::ast::intro_succ;
+    use crate::ast::intro_symmetry;
+    use crate::ast::intro_transitivity;
     use crate::ast::new_atom;
     use crate::ast::new_var;
 
@@ -356,5 +332,144 @@ mod tests {
         let actual = prod_term.to_string();
 
         assert_eq!(actual, expected)
+    }
+
+    #[test]
+    fn test_equality_of_formulas() {
+        let form_one = Formula::Atom {
+            left: Term::Zero,
+            right: Term::Succ {
+                child: Box::new(Term::Zero),
+            },
+        };
+
+        let form_two = Formula::Atom {
+            left: Term::Zero,
+            right: Term::Zero,
+        };
+
+        let expected = false;
+        let actual = form_one == form_two;
+
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn test_intro_transitivity_success() {
+        // (a = Sb)
+        let form_one = Formula::Atom {
+            left: Term::Var { var: 'a' },
+            right: Term::Succ {
+                child: Box::new(Term::Var { var: 'b' }),
+            },
+        };
+
+        // (Sb = c)
+        let form_two = Formula::Atom {
+            left: Term::Succ {
+                child: Box::new(Term::Var { var: 'b' }),
+            },
+            right: Term::Var { var: 'c' },
+        };
+
+        let expected = Ok(Formula::Atom {
+            left: Term::Var { var: 'a' },
+            right: Term::Var { var: 'c' },
+        });
+
+        // (a = c)
+        let actual = intro_transitivity(form_one, form_two);
+
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn test_intro_transitivity_fail() {
+        // (a = Sb)
+        let form_one = Formula::Atom {
+            left: Term::Var { var: 'a' },
+            right: Term::Succ {
+                child: Box::new(Term::Var { var: 'b' }),
+            },
+        };
+
+        // (b = c)
+        let form_two = Formula::Atom {
+            left: Term::Var { var: 'b' },
+            right: Term::Var { var: 'c' },
+        };
+
+        let actual = intro_transitivity(form_one, form_two);
+
+        assert!(actual.is_err());
+    }
+
+    #[test]
+    fn test_intro_succ_success() {
+        // (a = Sb)
+        let form_one = Formula::Atom {
+            left: Term::Var { var: 'a' },
+            right: Term::Succ {
+                child: Box::new(Term::Var { var: 'b' }),
+            },
+        };
+
+        // (Sa = SSb)
+        let expected = Ok(Formula::Atom {
+            left: Term::Succ {
+                child: Box::new(Term::Var { var: 'a' }),
+            },
+            right: Term::Succ {
+                child: Box::new(Term::Succ {
+                    child: Box::new(Term::Var { var: 'b' }),
+                }),
+            },
+        });
+
+        let actual = intro_succ(form_one);
+
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn test_elim_succ_success() {
+        // (Sa = SSb)
+        let form_one = Formula::Atom {
+            left: Term::Succ {
+                child: Box::new(Term::Var { var: 'a' }),
+            },
+            right: Term::Succ {
+                child: Box::new(Term::Succ {
+                    child: Box::new(Term::Var { var: 'b' }),
+                }),
+            },
+        };
+
+        // (a = Sb)
+        let expected = Ok(Formula::Atom {
+            left: Term::Var { var: 'a' },
+            right: Term::Succ {
+                child: Box::new(Term::Var { var: 'b' }),
+            },
+        });
+
+        let actual = elim_succ(form_one);
+
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn test_elim_succ_fail() {
+        // (a = Sb)
+        let form_one = Formula::Atom {
+            left: Term::Var { var: 'a' },
+            right: Term::Succ {
+                child: Box::new(Term::Var { var: 'b' }),
+            },
+        };
+
+        let actual = elim_succ(form_one);
+
+        assert!(actual.is_err());
     }
 }
