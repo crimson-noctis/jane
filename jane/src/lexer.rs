@@ -94,7 +94,8 @@ mod tests {
             vec![
                 Token::new(TokenKind::Successor),
                 Token::new(TokenKind::Successor),
-                Token::new(TokenKind::Zero)
+                Token::new(TokenKind::Zero),
+                Token::new(TokenKind::EOF)
             ]
         )
     }
@@ -121,6 +122,7 @@ mod tests {
                 Token::new(TokenKind::Successor),
                 Token::new(TokenKind::Zero),
                 Token::new(TokenKind::RightParen),
+                Token::new(TokenKind::EOF),
             ]
         )
     }
