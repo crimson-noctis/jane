@@ -27,27 +27,16 @@ impl Lexer {
     fn scan_token(&mut self) -> Result<(), String> {
         let ch = self.advance();
 
-        if self.try_whitespace(ch) {
-            return Ok(());
-        }
-
-        if self.try_newline(ch) {
+        if self.try_whitespace(ch)
+            || self.try_newline(ch)
+            || self.try_single_char(ch)
+            || self.try_keyword(ch)
+            || self.try_identifier(ch)
+        {
             return Ok(());
         }
 
         if self.try_implies(ch)? {
-            return Ok(());
-        }
-
-        if self.try_single_char(ch) {
-            return Ok(());
-        }
-
-        if self.try_keyword(ch) {
-            return Ok(());
-        }
-
-        if self.try_identifier(ch) {
             return Ok(());
         }
 
