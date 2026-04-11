@@ -7,6 +7,10 @@ impl Token {
     pub fn new(kind: TokenKind) -> Token {
         Token { kind }
     }
+
+    pub fn get_kind(&self) -> TokenKind {
+        self.kind.clone()
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -28,18 +32,20 @@ pub enum TokenKind {
 
     // Operators
     Plus,
-    Minus,
+    Times,
     Equals,
-    LessThan,
-    GreaterThan,
+    LeftAngleBracket,
+    RightAngleBracket,
 
     // Logical Symbols
     Not,
     And,
     Or,
-    Implies,
     Exists,
     ForAll,
+
+    // Two character token
+    Implies,
 
     // End of File
     EOF,

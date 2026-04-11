@@ -39,16 +39,23 @@ impl Scanner {
             '[' => Token::new(TokenKind::LeftBracket),
             ']' => Token::new(TokenKind::RightBracket),
             '+' => Token::new(TokenKind::Plus),
-            '-' => Token::new(TokenKind::Minus),
+            '*' => Token::new(TokenKind::Times),
             '=' => Token::new(TokenKind::Equals),
-            '<' => Token::new(TokenKind::LessThan),
-            '>' => Token::new(TokenKind::GreaterThan),
+            '<' => Token::new(TokenKind::LeftAngleBracket),
+            '>' => Token::new(TokenKind::RightAngleBracket),
             '~' => Token::new(TokenKind::Not),
             '&' => Token::new(TokenKind::And),
             '|' => Token::new(TokenKind::Or),
-            '?' => Token::new(TokenKind::Implies),
             'A' => Token::new(TokenKind::ForAll),
+            'E' => Token::new(TokenKind::Exists),
             '\n' => Token::new(TokenKind::EOF),
+            '-' => {
+                let next_token = self.advance();
+                if next_token != '>' {
+                    return Err("Unexpected character".to_string());
+                }
+                Token::new(TokenKind::Implies)
+            }
 
             ch if ch.is_ascii_lowercase() => Token::new(TokenKind::Identifier(ch)),
 
@@ -72,7 +79,7 @@ impl Scanner {
 
 #[cfg(test)]
 mod tests {
-    use crate::scanner::Scanner;
+    use crate::{scanner::Scanner, token::Token, token::TokenKind};
 
     #[test]
     fn test_token() {
@@ -83,9 +90,35 @@ mod tests {
         assert_eq!(
             scanner.tokens,
             vec![
-                crate::token::Token::new(crate::token::TokenKind::Successor),
-                crate::token::Token::new(crate::token::TokenKind::Successor),
-                crate::token::Token::new(crate::token::TokenKind::Zero)
+                Token::new(TokenKind::Successor),
+                Token::new(TokenKind::Successor),
+                Token::new(TokenKind::Zero)
+            ]
+        )
+    }
+
+    #[test]
+    fn test_imples() {
+        let mut scanner = Scanner::new("(0 = 0) -> (S0 = S0)".to_string());
+
+        scanner.scan_tokens();
+
+        assert_eq!(
+            scanner.tokens,
+            vec![
+                Token::new(TokenKind::LeftParen),
+                Token::new(TokenKind::Zero),
+                Token::new(TokenKind::Equals),
+                Token::new(TokenKind::Zero),
+                Token::new(TokenKind::RightParen),
+                Token::new(TokenKind::Implies),
+                Token::new(TokenKind::LeftParen),
+                Token::new(TokenKind::Successor),
+                Token::new(TokenKind::Zero),
+                Token::new(TokenKind::Equals),
+                Token::new(TokenKind::Successor),
+                Token::new(TokenKind::Zero),
+                Token::new(TokenKind::RightParen),
             ]
         )
     }
