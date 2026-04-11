@@ -27,7 +27,7 @@ fn parse_term(t: &[Token]) -> Term {
 #[cfg(test)]
 mod tests {
     use crate::{
-        ast::Term,
+        ast::{Term, new_succ},
         parser::parse_term,
         token::{Token, TokenKind},
     };
@@ -39,5 +39,18 @@ mod tests {
         let expected = Term::Zero;
 
         assert_eq!(term, expected);
+    }
+
+    #[test]
+    fn test_parse_successor_zero() {
+        let tokens = vec![
+            Token::new(TokenKind::Successor),
+            Token::new(TokenKind::Zero),
+        ];
+
+        let term = parse_term(&tokens);
+        let expected = new_succ(Term::Zero);
+
+        assert_eq!(term, expected)
     }
 }

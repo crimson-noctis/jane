@@ -21,28 +21,33 @@ impl Display for Term {
     }
 }
 
-fn new_zero() -> Term {
+#[inline]
+pub fn new_zero() -> Term {
     Term::Zero
 }
 
-fn new_var(var: char) -> Term {
+#[inline]
+pub fn new_var(var: char) -> Term {
     Term::Var { var }
 }
 
-fn new_succ(child: Term) -> Term {
+#[inline]
+pub fn new_succ(child: Term) -> Term {
     Term::Succ {
         child: Box::new(child),
     }
 }
 
-fn new_sum(left: Term, right: Term) -> Term {
+#[inline]
+pub fn new_sum(left: Term, right: Term) -> Term {
     Term::Sum {
         left: Box::new(left),
         right: Box::new(right),
     }
 }
 
-fn new_product(left: Term, right: Term) -> Term {
+#[inline]
+pub fn new_product(left: Term, right: Term) -> Term {
     Term::Product {
         left: Box::new(left),
         right: Box::new(right),
