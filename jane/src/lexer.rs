@@ -20,6 +20,8 @@ impl Lexer {
         while !self.is_at_end() {
             self.scan_token().unwrap();
         }
+
+        self.tokens.push(Token::new(TokenKind::EOF));
     }
 
     fn scan_token(&mut self) -> Result<(), String> {
@@ -48,7 +50,7 @@ impl Lexer {
             '|' => Token::new(TokenKind::Or),
             'A' => Token::new(TokenKind::ForAll),
             'E' => Token::new(TokenKind::Exists),
-            '\n' => Token::new(TokenKind::EOF),
+            '\n' => Token::new(TokenKind::Newline),
             '-' => {
                 let next_token = self.advance();
                 if next_token != '>' {

@@ -47,6 +47,9 @@ pub enum TokenKind {
     // Two character token
     Implies,
 
+    // New Line
+    Newline,
+
     // End of File
     EOF,
 }
