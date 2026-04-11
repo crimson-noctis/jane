@@ -1,13 +1,13 @@
 use crate::token::Token;
 use crate::token::TokenKind;
 
-pub struct Scanner {
+pub struct Lexer {
     source: Vec<char>,
     pub tokens: Vec<Token>,
     current: usize,
 }
 
-impl Scanner {
+impl Lexer {
     pub fn new(source: String) -> Self {
         Self {
             source: source.chars().collect(),
@@ -79,16 +79,16 @@ impl Scanner {
 
 #[cfg(test)]
 mod tests {
-    use crate::{scanner::Scanner, token::Token, token::TokenKind};
+    use crate::{lexer::Lexer, token::Token, token::TokenKind};
 
     #[test]
     fn test_token() {
-        let mut scanner = Scanner::new("SS0".to_string());
+        let mut lexer = Lexer::new("SS0".to_string());
 
-        scanner.scan_tokens();
+        lexer.scan_tokens();
 
         assert_eq!(
-            scanner.tokens,
+            lexer.tokens,
             vec![
                 Token::new(TokenKind::Successor),
                 Token::new(TokenKind::Successor),
@@ -99,12 +99,12 @@ mod tests {
 
     #[test]
     fn test_imples() {
-        let mut scanner = Scanner::new("(0 = 0) -> (S0 = S0)".to_string());
+        let mut lexer = Lexer::new("(0 = 0) -> (S0 = S0)".to_string());
 
-        scanner.scan_tokens();
+        lexer.scan_tokens();
 
         assert_eq!(
-            scanner.tokens,
+            lexer.tokens,
             vec![
                 Token::new(TokenKind::LeftParen),
                 Token::new(TokenKind::Zero),
