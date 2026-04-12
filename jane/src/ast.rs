@@ -269,6 +269,63 @@ fn intro_contrapositive(p: Formula) -> Result<Formula, String> {
     }
 }
 
+#[rustfmt::skip]
+fn intro_axiom(n: usize) -> Result<Formula, String> {
+    let axiom_one = new_forall('a',
+                      new_negation(
+                        new_atom(
+                          new_succ(
+                            new_var('a')), 
+                          new_zero())));
+
+    let axiom_two = new_forall('a', 
+                      new_atom(
+                        new_sum(
+                          new_var('a'), 
+                          new_zero()), 
+                        new_var('a')));
+    
+    let axiom_three = new_forall('a',
+                        new_forall('b',
+                          new_atom(
+                            new_sum(
+                              new_var('a'), 
+                              new_succ(new_var('b'))),
+                            new_succ(
+                              new_sum(
+                                new_var('a'),
+                                new_var('b'))))));
+    
+    let axiom_four = new_forall('a', 
+                       new_atom(
+                         new_product(
+                           new_var('a'), 
+                           new_zero()),
+                         new_zero()));
+    
+    let axiom_five = new_forall('a',
+                       new_forall('b',
+                         new_atom(
+                           new_product(
+                             new_var('a'),
+                             new_succ(
+                               new_var('b'))),
+                           new_sum(
+                             new_product(
+                               new_var('a'),
+                               new_var('b')),
+                             new_var('a')))));
+        
+    match n {
+        1 => Ok(axiom_one),
+        2 => Ok(axiom_two),
+        3 => Ok(axiom_three),
+        4 => Ok(axiom_four),
+        5 => Ok(axiom_five),
+        _ => Err("Intro axiom: n is out of range".to_string())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::ast::Formula;
