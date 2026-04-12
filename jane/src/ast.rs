@@ -251,22 +251,44 @@ fn elim_succ(p: Formula) -> Result<Formula, String> {
     }
 }
 
-#[rustfmt::skip]
 fn intro_contrapositive(p: Formula) -> Result<Formula, String> {
     if let Formula::Implies { left, right } = p {
-        match (*left, *right) {
-            // (¬p -> ¬q) becomes (q -> p)
-            (Formula::Negation { child: left }, Formula::Negation { child: right }) => Ok(new_implies(*right, *left)),
-            // (p -> ¬q) becomes (q -> ¬p)
-            (left, Formula::Negation { child: right }) => Ok(new_implies(*right, new_negation(left))),
-            // (¬p -> q) becomes (¬q -> p)
-            (Formula::Negation { child: left }, right) => Ok(new_implies(new_negation(right), *left)),
-            // (p -> q) becomes (¬q -> ¬p)
-            (left, right) => Ok(new_implies(new_negation(right), new_negation(left))),
-        }
+        // (¬p -> ¬q) becomes (q -> p)
+        // (p -> ¬q) becomes (q -> ¬p)
+        // (¬p -> q) becomes (¬q -> p)
+        // (p -> q) becomes (¬q -> ¬p)
+        Ok(new_implies(invert(*right), invert(*left)))
     } else {
         Err("Intro contrapositive: Formula must be an implication".to_string())
     }
+}
+
+// Helper function that returns ~p when passed p and p when passed ~p
+fn invert(p: Formula) -> Formula {
+    if let Formula::Negation { child: inner } = p {
+        *inner
+    } else {
+        new_negation(p)
+    }
+}
+
+fn intro_de_morgan(mut p: Formula) -> Result<Formula, String> {
+    let mut was_inverted = false;
+    if let Formula::Negation { child: inner } = p {
+        p = *inner;
+        was_inverted = true;
+    }
+
+    p = match p {
+        Formula::And { left, right } => new_or(invert(*left), invert(*right)),
+        Formula::Or { left, right } => new_and(invert(*left), invert(*right)),
+        _ => return Err("Fail.".to_string()),
+    };
+
+    if !was_inverted {
+        p = new_negation(p)
+    }
+    Ok(p)
 }
 
 #[rustfmt::skip]
@@ -326,19 +348,64 @@ fn intro_axiom(n: usize) -> Result<Formula, String> {
     }
 }
 
+fn intro_exists(p: Formula) -> Formula {
+    todo!();
+}
+
+fn elim_exists(p: Formula) -> Formula {
+    todo!();
+}
+
+fn intro_forall(p: Formula) -> Formula {
+    todo!();
+}
+
+fn elim_forall(p: Formula) -> Formula {
+    todo!();
+}
+
+fn intro_interchange(mut p: Formula) -> Result<Formula, String> {
+    let mut was_inverted = false;
+    if let Formula::Negation { child: inner } = p {
+        p = *inner;
+        was_inverted = true;
+    }
+
+    p = match p {
+        Formula::Forall { var, body } => new_exists(var, invert(*body)),
+        Formula::Exists { var, body } => new_forall(var, invert(*body)),
+        _ => return Err("Fail.".to_string()),
+    };
+
+    if !was_inverted {
+        p = new_negation(p)
+    }
+    Ok(p)
+}
+
 #[cfg(test)]
 mod tests {
     use crate::ast::Formula;
     use crate::ast::Term;
     use crate::ast::elim_succ;
     use crate::ast::intro_contrapositive;
+    use crate::ast::intro_de_morgan;
+    use crate::ast::intro_interchange;
     use crate::ast::intro_succ;
     use crate::ast::intro_symmetry;
     use crate::ast::intro_transitivity;
+    use crate::ast::new_and;
     use crate::ast::new_atom;
+    use crate::ast::new_exists;
+    use crate::ast::new_forall;
     use crate::ast::new_implies;
     use crate::ast::new_negation;
+    use crate::ast::new_or;
     use crate::ast::new_var;
+
+    fn new_self_equal_atom(ch: char) -> Formula {
+        new_atom(new_var(ch), new_var(ch))
+    }
 
     #[test]
     fn test_print_zero() {
@@ -625,5 +692,93 @@ mod tests {
     }
 
     #[test]
-    fn test_intro_contrapositive_success_fail() {}
+    fn test_intro_contrapositive_success_fail() {
+        let form_one = new_and(
+            new_atom(new_var('b'), new_var('b')),
+            new_negation(new_atom(new_var('a'), new_var('a'))),
+        );
+
+        let actual = intro_contrapositive(form_one);
+
+        assert!(actual.is_err());
+    }
+
+    #[test]
+    fn test_intro_de_morgan_one_success() {
+        let formula = new_and(new_self_equal_atom('a'), new_self_equal_atom('b'));
+        let expected = Ok(new_negation(new_or(
+            new_negation(new_self_equal_atom('a')),
+            new_negation(new_self_equal_atom('b')),
+        )));
+
+        let actual = intro_de_morgan(formula);
+
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn test_intro_de_morgan_two_success() {
+        let formula = new_or(new_self_equal_atom('a'), new_self_equal_atom('b'));
+        let expected = Ok(new_negation(new_and(
+            new_negation(new_self_equal_atom('a')),
+            new_negation(new_self_equal_atom('b')),
+        )));
+
+        let actual = intro_de_morgan(formula);
+
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn test_intro_de_morgan_fail() {
+        // (a = a) -> (b = b)
+        let formula = new_implies(new_self_equal_atom('a'), new_self_equal_atom('b'));
+
+        let actual = intro_de_morgan(formula);
+
+        assert!(actual.is_err());
+    }
+
+    #[test]
+    fn test_interchange_not_exists_to_forall_not_success() {
+        let formula = new_negation(new_exists('a', new_self_equal_atom('a')));
+        let actual = intro_interchange(formula);
+
+        let expected = Ok(new_forall('a', new_negation(new_self_equal_atom('a'))));
+
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn test_interchange_not_forall_to_exists_not_success() {
+        let formula = new_negation(new_forall('a', new_self_equal_atom('a')));
+        let actual = intro_interchange(formula);
+
+        let expected = Ok(new_exists('a', new_negation(new_self_equal_atom('a'))));
+
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn test_interchange_exists_not_to_not_forall_success() {
+        let formula = new_exists('a', new_negation(new_self_equal_atom('a')));
+        let actual = intro_interchange(formula);
+
+        let expected = Ok(new_negation(new_forall('a', new_self_equal_atom('a'))));
+
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn test_interchange_forall_not_to_not_exists_success() {
+        let formula = new_forall('a', new_negation(new_self_equal_atom('a')));
+        let actual = intro_interchange(formula);
+
+        let expected = Ok(new_negation(new_exists('a', new_self_equal_atom('a'))));
+
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn test_interchange_fail() {}
 }
