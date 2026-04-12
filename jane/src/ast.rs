@@ -1,6 +1,6 @@
 use std::{fmt::Display, num::FpCategory};
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Debug, PartialEq)]
 pub enum Term {
     Zero,
     Var { var: char },
@@ -54,7 +54,7 @@ pub fn new_product(left: Term, right: Term) -> Term {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Debug, PartialEq)]
 pub enum Formula {
     Atom {
         left: Term,
@@ -251,41 +251,18 @@ fn elim_succ(p: Formula) -> Result<Formula, String> {
     }
 }
 
+#[rustfmt::skip]
 fn intro_contrapositive(p: Formula) -> Result<Formula, String> {
     if let Formula::Implies { left, right } = p {
-        match (left.as_ref(), right.as_ref()) {
-            (Formula::Negation { child: left }, Formula::Negation { child: right }) => {
-                // (¬p -> ¬q) becomes (q -> p)
-                Ok(Formula::Implies {
-                    left: Box::new(*right.clone()),
-                    right: Box::new(*left.clone()),
-                })
-            }
-            (left, Formula::Negation { child: right }) => {
-                // (p -> ¬q) becomes (q -> ¬p)
-                Ok(Formula::Implies {
-                    left: Box::new(*right.clone()),
-                    right: Box::new(Formula::Negation {
-                        child: Box::new(left.clone()),
-                    }),
-                })
-            }
-            (Formula::Negation { child: left }, right) => {
-                // (¬p -> q) becomes (¬q -> p)
-                Ok(Formula::Implies {
-                    left: Box::new(Formula::Negation {
-                        child: Box::new(right.clone()),
-                    }),
-                    right: Box::new(*left.clone()),
-                })
-            }
-            _ => {
-                // (p -> q) becomes (¬q -> ¬p)
-                Ok(Formula::Implies {
-                    left: Box::new(Formula::Negation { child: right }),
-                    right: Box::new(Formula::Negation { child: left }),
-                })
-            }
+        match (*left, *right) {
+            // (¬p -> ¬q) becomes (q -> p)
+            (Formula::Negation { child: left }, Formula::Negation { child: right }) => Ok(new_implies(*right, *left)),
+            // (p -> ¬q) becomes (q -> ¬p)
+            (left, Formula::Negation { child: right }) => Ok(new_implies(*right, new_negation(left))),
+            // (¬p -> q) becomes (¬q -> p)
+            (Formula::Negation { child: left }, right) => Ok(new_implies(new_negation(right), *left)),
+            // (p -> q) becomes (¬q -> ¬p)
+            (left, right) => Ok(new_implies(new_negation(right), new_negation(left))),
         }
     } else {
         Err("Intro contrapositive: Formula must be an implication".to_string())
