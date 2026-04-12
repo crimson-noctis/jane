@@ -1,6 +1,6 @@
 use std::{fmt::Display, num::FpCategory};
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Term {
     Zero,
     Var { var: char },
@@ -54,7 +54,7 @@ pub fn new_product(left: Term, right: Term) -> Term {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Formula {
     Atom {
         left: Term,
@@ -251,15 +251,59 @@ fn elim_succ(p: Formula) -> Result<Formula, String> {
     }
 }
 
+fn intro_contrapositive(p: Formula) -> Result<Formula, String> {
+    if let Formula::Implies { left, right } = p {
+        match (left.as_ref(), right.as_ref()) {
+            (Formula::Negation { child: left }, Formula::Negation { child: right }) => {
+                // (¬p -> ¬q) becomes (q -> p)
+                Ok(Formula::Implies {
+                    left: Box::new(*right.clone()),
+                    right: Box::new(*left.clone()),
+                })
+            }
+            (left, Formula::Negation { child: right }) => {
+                // (p -> ¬q) becomes (q -> ¬p)
+                Ok(Formula::Implies {
+                    left: Box::new(*right.clone()),
+                    right: Box::new(Formula::Negation {
+                        child: Box::new(left.clone()),
+                    }),
+                })
+            }
+            (Formula::Negation { child: left }, right) => {
+                // (¬p -> q) becomes (¬q -> p)
+                Ok(Formula::Implies {
+                    left: Box::new(Formula::Negation {
+                        child: Box::new(right.clone()),
+                    }),
+                    right: Box::new(*left.clone()),
+                })
+            }
+            _ => {
+                // (p -> q) becomes (¬q -> ¬p)
+                Ok(Formula::Implies {
+                    left: Box::new(Formula::Negation { child: right }),
+                    right: Box::new(Formula::Negation { child: left }),
+                })
+            }
+        }
+    } else {
+        Err("Intro contrapositive: Formula must be an implication".to_string())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::ast::Formula;
     use crate::ast::Term;
     use crate::ast::elim_succ;
+    use crate::ast::intro_contrapositive;
     use crate::ast::intro_succ;
     use crate::ast::intro_symmetry;
     use crate::ast::intro_transitivity;
     use crate::ast::new_atom;
+    use crate::ast::new_implies;
+    use crate::ast::new_negation;
     use crate::ast::new_var;
 
     #[test]
@@ -477,4 +521,75 @@ mod tests {
 
         assert!(actual.is_err());
     }
+
+    #[test]
+    fn test_intro_contrapositive_one_success() {
+        let form_one = new_implies(
+            new_atom(new_var('a'), new_var('a')),
+            new_atom(new_var('b'), new_var('b')),
+        );
+
+        let expected = Ok(new_implies(
+            new_negation(new_atom(new_var('b'), new_var('b'))),
+            new_negation(new_atom(new_var('a'), new_var('a'))),
+        ));
+
+        let actual = intro_contrapositive(form_one);
+
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn test_intro_contrapositive_two_success() {
+        let form_one = new_implies(
+            new_negation(new_atom(new_var('b'), new_var('b'))),
+            new_negation(new_atom(new_var('a'), new_var('a'))),
+        );
+
+        let expected = Ok(new_implies(
+            new_atom(new_var('a'), new_var('a')),
+            new_atom(new_var('b'), new_var('b')),
+        ));
+
+        let actual = intro_contrapositive(form_one);
+
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn test_intro_contrapositive_three_success() {
+        let form_one = new_implies(
+            new_atom(new_var('b'), new_var('b')),
+            new_negation(new_atom(new_var('a'), new_var('a'))),
+        );
+
+        let expected = Ok(new_implies(
+            new_atom(new_var('a'), new_var('a')),
+            new_negation(new_atom(new_var('b'), new_var('b'))),
+        ));
+
+        let actual = intro_contrapositive(form_one);
+
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn test_intro_contrapositive_four_success() {
+        let form_one = new_implies(
+            new_negation(new_atom(new_var('b'), new_var('b'))),
+            new_atom(new_var('a'), new_var('a')),
+        );
+
+        let expected = Ok(new_implies(
+            new_negation(new_atom(new_var('a'), new_var('a'))),
+            new_atom(new_var('b'), new_var('b')),
+        ));
+
+        let actual = intro_contrapositive(form_one);
+
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn test_intro_contrapositive_success_fail() {}
 }
