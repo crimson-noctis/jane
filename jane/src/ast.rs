@@ -1,6 +1,6 @@
-use std::{fmt::Display, num::FpCategory};
+use std::{fmt::Display, num::FpCategory, ops};
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Term {
     Zero,
     Var { var: char },
@@ -17,6 +17,28 @@ impl Display for Term {
             Self::Succ { child } => write!(f, "S{}", child),
             Self::Sum { left, right } => write!(f, "({} + {})", left, right),
             Self::Product { left, right } => write!(f, "({} × {})", left, right),
+        }
+    }
+}
+
+impl ops::Add<Term> for Term {
+    type Output = Term;
+
+    fn add(self, rhs: Term) -> Self::Output {
+        Term::Sum {
+            left: Box::new(self),
+            right: Box::new(rhs),
+        }
+    }
+}
+
+impl ops::Mul<Term> for Term {
+    type Output = Term;
+
+    fn mul(self, rhs: Term) -> Self::Output {
+        Term::Product {
+            left: Box::new(self),
+            right: Box::new(rhs),
         }
     }
 }
@@ -54,7 +76,7 @@ pub fn new_product(left: Term, right: Term) -> Term {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Formula {
     Atom {
         left: Term,
@@ -93,8 +115,8 @@ impl Display for Formula {
             Self::And { left, right } => write!(f, "({} ∧ {})", left, right),
             Self::Or { left, right } => write!(f, "({} ∨ {})", left, right),
             Self::Implies { left, right } => write!(f, "({} -> {})", left, right),
-            Self::Exists { var, body } => write!(f, "(∀{}: {})", var, body),
-            Self::Forall { var, body } => write!(f, "(∃{}: {})", var, body),
+            Self::Forall { var, body } => write!(f, "(∀{}: {})", var, body),
+            Self::Exists { var, body } => write!(f, "(∃{}: {})", var, body),
         }
     }
 }
@@ -360,8 +382,58 @@ fn intro_forall(p: Formula) -> Formula {
     todo!();
 }
 
-fn elim_forall(p: Formula) -> Formula {
-    todo!();
+fn replace_var_in_term(p: &Term, from: char, to: &Term) -> Term {
+    match p {
+        Term::Zero => new_zero(),
+        Term::Var { var } => {
+            if *var == from {
+                to.clone()
+            } else {
+                new_var(*var)
+            }
+        }
+        Term::Succ { child } => new_succ(replace_var_in_term(child, from, to)),
+        Term::Sum { left, right } => new_sum(
+            replace_var_in_term(left, from, to),
+            replace_var_in_term(right, from, to),
+        ),
+        Term::Product { left, right } => new_product(
+            replace_var_in_term(left, from, to),
+            replace_var_in_term(right, from, to),
+        ),
+    }
+}
+
+fn replace_var_in_formula(p: Formula, from: char, to: &Term) -> Formula {
+    match p {
+        Formula::Atom { left, right } => new_atom(
+            replace_var_in_term(&left, from, to),
+            replace_var_in_term(&right, from, to),
+        ),
+        Formula::Negation { child } => replace_var_in_formula(*child, from, to),
+        Formula::And { left, right } => new_and(
+            replace_var_in_formula(*left, from, to),
+            replace_var_in_formula(*right, from, to),
+        ),
+        Formula::Or { left, right } => new_or(
+            replace_var_in_formula(*left, from, to),
+            replace_var_in_formula(*right, from, to),
+        ),
+        Formula::Implies { left, right } => new_implies(
+            replace_var_in_formula(*left, from, to),
+            replace_var_in_formula(*right, from, to),
+        ),
+        Formula::Exists { var, body } => new_exists(var, replace_var_in_formula(*body, from, to)),
+        Formula::Forall { var, body } => new_forall(var, replace_var_in_formula(*body, from, to)),
+    }
+}
+
+fn elim_forall(p: Formula, t: Term) -> Result<Formula, String> {
+    if let Formula::Forall { var, body } = p {
+        Ok(replace_var_in_formula(*body, var, &t))
+    } else {
+        Err("Error.".to_string())
+    }
 }
 
 fn intro_interchange(mut p: Formula) -> Result<Formula, String> {
@@ -387,6 +459,7 @@ fn intro_interchange(mut p: Formula) -> Result<Formula, String> {
 mod tests {
     use crate::ast::Formula;
     use crate::ast::Term;
+    use crate::ast::elim_forall;
     use crate::ast::elim_succ;
     use crate::ast::intro_contrapositive;
     use crate::ast::intro_de_morgan;
@@ -401,7 +474,10 @@ mod tests {
     use crate::ast::new_implies;
     use crate::ast::new_negation;
     use crate::ast::new_or;
+    use crate::ast::new_succ;
+    use crate::ast::new_sum;
     use crate::ast::new_var;
+    use crate::ast::new_zero;
 
     fn new_self_equal_atom(ch: char) -> Formula {
         new_atom(new_var(ch), new_var(ch))
@@ -781,4 +857,64 @@ mod tests {
 
     #[test]
     fn test_interchange_fail() {}
+
+    #[test]
+    fn test_elim_forall_success() {
+        // ∀a:∀b:(a + Sb) = S(a + b)
+        let formula = new_forall(
+            'a',
+            new_forall(
+                'b',
+                new_atom(
+                    new_sum(new_var('a'), new_succ(new_var('b'))),
+                    new_succ(new_sum(new_var('a'), new_var('b'))),
+                ),
+            ),
+        );
+
+        // 0
+        let term = Term::Zero;
+
+        // ∀b:(0 + Sb) = S(0 + b)
+        let expected = Ok(new_forall(
+            'b',
+            new_atom(
+                new_sum(new_zero(), new_succ(new_var('b'))),
+                new_succ(new_sum(new_zero(), new_var('b'))),
+            ),
+        ));
+
+        let actual = elim_forall(formula, term);
+
+        println!("{}", actual.clone().unwrap());
+        println!("{}", expected.clone().unwrap());
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn test_elim_forall_two_success() {
+        // ∀b:(0 + Sb) = S(0 + b)
+        let formula = new_forall(
+            'b',
+            new_atom(
+                new_sum(new_zero(), new_succ(new_var('b'))),
+                new_succ(new_sum(new_zero(), new_var('b'))),
+            ),
+        );
+
+        // (b + c)
+        let term = new_var('b') + new_var('c');
+
+        // (0 + S(b + c)) = S(0 + (b + c))
+        let expected = Ok(new_atom(
+            new_sum(new_zero(), new_succ(new_sum(new_var('b'), new_var('c')))),
+            new_succ(new_sum(new_zero(), new_sum(new_var('b'), new_var('c')))),
+        ));
+
+        let actual = elim_forall(formula, term);
+
+        println!("{}", actual.clone().unwrap());
+        println!("{}", expected.clone().unwrap());
+        assert_eq!(actual, expected);
+    }
 }
