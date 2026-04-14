@@ -1,6 +1,6 @@
-use std::{fmt::Display, num::FpCategory};
+use std::{fmt::Display, num::FpCategory, ops};
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Term {
     Zero,
     Var { var: char },
@@ -17,6 +17,28 @@ impl Display for Term {
             Self::Succ { child } => write!(f, "S{}", child),
             Self::Sum { left, right } => write!(f, "({} + {})", left, right),
             Self::Product { left, right } => write!(f, "({} × {})", left, right),
+        }
+    }
+}
+
+impl ops::Add<Term> for Term {
+    type Output = Term;
+
+    fn add(self, rhs: Term) -> Self::Output {
+        Term::Sum {
+            left: Box::new(self),
+            right: Box::new(rhs),
+        }
+    }
+}
+
+impl ops::Mul<Term> for Term {
+    type Output = Term;
+
+    fn mul(self, rhs: Term) -> Self::Output {
+        Term::Product {
+            left: Box::new(self),
+            right: Box::new(rhs),
         }
     }
 }
@@ -54,7 +76,7 @@ pub fn new_product(left: Term, right: Term) -> Term {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Formula {
     Atom {
         left: Term,
@@ -93,8 +115,8 @@ impl Display for Formula {
             Self::And { left, right } => write!(f, "({} ∧ {})", left, right),
             Self::Or { left, right } => write!(f, "({} ∨ {})", left, right),
             Self::Implies { left, right } => write!(f, "({} -> {})", left, right),
-            Self::Exists { var, body } => write!(f, "(∀{}: {})", var, body),
-            Self::Forall { var, body } => write!(f, "(∃{}: {})", var, body),
+            Self::Forall { var, body } => write!(f, "(∀{}: {})", var, body),
+            Self::Exists { var, body } => write!(f, "(∃{}: {})", var, body),
         }
     }
 }
@@ -251,16 +273,215 @@ fn elim_succ(p: Formula) -> Result<Formula, String> {
     }
 }
 
+fn intro_contrapositive(p: Formula) -> Result<Formula, String> {
+    if let Formula::Implies { left, right } = p {
+        // (¬p -> ¬q) becomes (q -> p)
+        // (p -> ¬q) becomes (q -> ¬p)
+        // (¬p -> q) becomes (¬q -> p)
+        // (p -> q) becomes (¬q -> ¬p)
+        Ok(new_implies(invert(*right), invert(*left)))
+    } else {
+        Err("Intro contrapositive: Formula must be an implication".to_string())
+    }
+}
+
+// Helper function that returns ~p when passed p and p when passed ~p
+fn invert(p: Formula) -> Formula {
+    if let Formula::Negation { child: inner } = p {
+        *inner
+    } else {
+        new_negation(p)
+    }
+}
+
+fn intro_de_morgan(mut p: Formula) -> Result<Formula, String> {
+    let mut was_inverted = false;
+    if let Formula::Negation { child: inner } = p {
+        p = *inner;
+        was_inverted = true;
+    }
+
+    p = match p {
+        Formula::And { left, right } => new_or(invert(*left), invert(*right)),
+        Formula::Or { left, right } => new_and(invert(*left), invert(*right)),
+        _ => return Err("Fail.".to_string()),
+    };
+
+    if !was_inverted {
+        p = new_negation(p)
+    }
+    Ok(p)
+}
+
+#[rustfmt::skip]
+fn intro_axiom(n: usize) -> Result<Formula, String> {
+    let axiom_one = new_forall('a',
+                      new_negation(
+                        new_atom(
+                          new_succ(
+                            new_var('a')), 
+                          new_zero())));
+
+    let axiom_two = new_forall('a', 
+                      new_atom(
+                        new_sum(
+                          new_var('a'), 
+                          new_zero()), 
+                        new_var('a')));
+    
+    let axiom_three = new_forall('a',
+                        new_forall('b',
+                          new_atom(
+                            new_sum(
+                              new_var('a'), 
+                              new_succ(new_var('b'))),
+                            new_succ(
+                              new_sum(
+                                new_var('a'),
+                                new_var('b'))))));
+    
+    let axiom_four = new_forall('a', 
+                       new_atom(
+                         new_product(
+                           new_var('a'), 
+                           new_zero()),
+                         new_zero()));
+    
+    let axiom_five = new_forall('a',
+                       new_forall('b',
+                         new_atom(
+                           new_product(
+                             new_var('a'),
+                             new_succ(
+                               new_var('b'))),
+                           new_sum(
+                             new_product(
+                               new_var('a'),
+                               new_var('b')),
+                             new_var('a')))));
+        
+    match n {
+        1 => Ok(axiom_one),
+        2 => Ok(axiom_two),
+        3 => Ok(axiom_three),
+        4 => Ok(axiom_four),
+        5 => Ok(axiom_five),
+        _ => Err("Intro axiom: n is out of range".to_string())
+    }
+}
+
+fn intro_exists(p: Formula) -> Formula {
+    todo!();
+}
+
+fn elim_exists(p: Formula) -> Formula {
+    todo!();
+}
+
+fn intro_forall(p: Formula) -> Formula {
+    todo!();
+}
+
+fn replace_var_in_term(p: &Term, from: char, to: &Term) -> Term {
+    match p {
+        Term::Zero => new_zero(),
+        Term::Var { var } => {
+            if *var == from {
+                to.clone()
+            } else {
+                new_var(*var)
+            }
+        }
+        Term::Succ { child } => new_succ(replace_var_in_term(child, from, to)),
+        Term::Sum { left, right } => new_sum(
+            replace_var_in_term(left, from, to),
+            replace_var_in_term(right, from, to),
+        ),
+        Term::Product { left, right } => new_product(
+            replace_var_in_term(left, from, to),
+            replace_var_in_term(right, from, to),
+        ),
+    }
+}
+
+fn replace_var_in_formula(p: Formula, from: char, to: &Term) -> Formula {
+    match p {
+        Formula::Atom { left, right } => new_atom(
+            replace_var_in_term(&left, from, to),
+            replace_var_in_term(&right, from, to),
+        ),
+        Formula::Negation { child } => replace_var_in_formula(*child, from, to),
+        Formula::And { left, right } => new_and(
+            replace_var_in_formula(*left, from, to),
+            replace_var_in_formula(*right, from, to),
+        ),
+        Formula::Or { left, right } => new_or(
+            replace_var_in_formula(*left, from, to),
+            replace_var_in_formula(*right, from, to),
+        ),
+        Formula::Implies { left, right } => new_implies(
+            replace_var_in_formula(*left, from, to),
+            replace_var_in_formula(*right, from, to),
+        ),
+        Formula::Exists { var, body } => new_exists(var, replace_var_in_formula(*body, from, to)),
+        Formula::Forall { var, body } => new_forall(var, replace_var_in_formula(*body, from, to)),
+    }
+}
+
+fn elim_forall(p: Formula, t: Term) -> Result<Formula, String> {
+    if let Formula::Forall { var, body } = p {
+        Ok(replace_var_in_formula(*body, var, &t))
+    } else {
+        Err("Error.".to_string())
+    }
+}
+
+fn intro_interchange(mut p: Formula) -> Result<Formula, String> {
+    let mut was_inverted = false;
+    if let Formula::Negation { child: inner } = p {
+        p = *inner;
+        was_inverted = true;
+    }
+
+    p = match p {
+        Formula::Forall { var, body } => new_exists(var, invert(*body)),
+        Formula::Exists { var, body } => new_forall(var, invert(*body)),
+        _ => return Err("Fail.".to_string()),
+    };
+
+    if !was_inverted {
+        p = new_negation(p)
+    }
+    Ok(p)
+}
+
 #[cfg(test)]
 mod tests {
     use crate::ast::Formula;
     use crate::ast::Term;
+    use crate::ast::elim_forall;
     use crate::ast::elim_succ;
+    use crate::ast::intro_contrapositive;
+    use crate::ast::intro_de_morgan;
+    use crate::ast::intro_interchange;
     use crate::ast::intro_succ;
     use crate::ast::intro_symmetry;
     use crate::ast::intro_transitivity;
+    use crate::ast::new_and;
     use crate::ast::new_atom;
+    use crate::ast::new_exists;
+    use crate::ast::new_forall;
+    use crate::ast::new_implies;
+    use crate::ast::new_negation;
+    use crate::ast::new_or;
+    use crate::ast::new_succ;
+    use crate::ast::new_sum;
     use crate::ast::new_var;
+    use crate::ast::new_zero;
+
+    fn new_self_equal_atom(ch: char) -> Formula {
+        new_atom(new_var(ch), new_var(ch))
+    }
 
     #[test]
     fn test_print_zero() {
@@ -476,5 +697,224 @@ mod tests {
         let actual = elim_succ(form_one);
 
         assert!(actual.is_err());
+    }
+
+    #[test]
+    fn test_intro_contrapositive_one_success() {
+        let form_one = new_implies(
+            new_atom(new_var('a'), new_var('a')),
+            new_atom(new_var('b'), new_var('b')),
+        );
+
+        let expected = Ok(new_implies(
+            new_negation(new_atom(new_var('b'), new_var('b'))),
+            new_negation(new_atom(new_var('a'), new_var('a'))),
+        ));
+
+        let actual = intro_contrapositive(form_one);
+
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn test_intro_contrapositive_two_success() {
+        let form_one = new_implies(
+            new_negation(new_atom(new_var('b'), new_var('b'))),
+            new_negation(new_atom(new_var('a'), new_var('a'))),
+        );
+
+        let expected = Ok(new_implies(
+            new_atom(new_var('a'), new_var('a')),
+            new_atom(new_var('b'), new_var('b')),
+        ));
+
+        let actual = intro_contrapositive(form_one);
+
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn test_intro_contrapositive_three_success() {
+        let form_one = new_implies(
+            new_atom(new_var('b'), new_var('b')),
+            new_negation(new_atom(new_var('a'), new_var('a'))),
+        );
+
+        let expected = Ok(new_implies(
+            new_atom(new_var('a'), new_var('a')),
+            new_negation(new_atom(new_var('b'), new_var('b'))),
+        ));
+
+        let actual = intro_contrapositive(form_one);
+
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn test_intro_contrapositive_four_success() {
+        let form_one = new_implies(
+            new_negation(new_atom(new_var('b'), new_var('b'))),
+            new_atom(new_var('a'), new_var('a')),
+        );
+
+        let expected = Ok(new_implies(
+            new_negation(new_atom(new_var('a'), new_var('a'))),
+            new_atom(new_var('b'), new_var('b')),
+        ));
+
+        let actual = intro_contrapositive(form_one);
+
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn test_intro_contrapositive_success_fail() {
+        let form_one = new_and(
+            new_atom(new_var('b'), new_var('b')),
+            new_negation(new_atom(new_var('a'), new_var('a'))),
+        );
+
+        let actual = intro_contrapositive(form_one);
+
+        assert!(actual.is_err());
+    }
+
+    #[test]
+    fn test_intro_de_morgan_one_success() {
+        let formula = new_and(new_self_equal_atom('a'), new_self_equal_atom('b'));
+        let expected = Ok(new_negation(new_or(
+            new_negation(new_self_equal_atom('a')),
+            new_negation(new_self_equal_atom('b')),
+        )));
+
+        let actual = intro_de_morgan(formula);
+
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn test_intro_de_morgan_two_success() {
+        let formula = new_or(new_self_equal_atom('a'), new_self_equal_atom('b'));
+        let expected = Ok(new_negation(new_and(
+            new_negation(new_self_equal_atom('a')),
+            new_negation(new_self_equal_atom('b')),
+        )));
+
+        let actual = intro_de_morgan(formula);
+
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn test_intro_de_morgan_fail() {
+        // (a = a) -> (b = b)
+        let formula = new_implies(new_self_equal_atom('a'), new_self_equal_atom('b'));
+
+        let actual = intro_de_morgan(formula);
+
+        assert!(actual.is_err());
+    }
+
+    #[test]
+    fn test_interchange_not_exists_to_forall_not_success() {
+        let formula = new_negation(new_exists('a', new_self_equal_atom('a')));
+        let actual = intro_interchange(formula);
+
+        let expected = Ok(new_forall('a', new_negation(new_self_equal_atom('a'))));
+
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn test_interchange_not_forall_to_exists_not_success() {
+        let formula = new_negation(new_forall('a', new_self_equal_atom('a')));
+        let actual = intro_interchange(formula);
+
+        let expected = Ok(new_exists('a', new_negation(new_self_equal_atom('a'))));
+
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn test_interchange_exists_not_to_not_forall_success() {
+        let formula = new_exists('a', new_negation(new_self_equal_atom('a')));
+        let actual = intro_interchange(formula);
+
+        let expected = Ok(new_negation(new_forall('a', new_self_equal_atom('a'))));
+
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn test_interchange_forall_not_to_not_exists_success() {
+        let formula = new_forall('a', new_negation(new_self_equal_atom('a')));
+        let actual = intro_interchange(formula);
+
+        let expected = Ok(new_negation(new_exists('a', new_self_equal_atom('a'))));
+
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn test_interchange_fail() {}
+
+    #[test]
+    fn test_elim_forall_success() {
+        // ∀a:∀b:(a + Sb) = S(a + b)
+        let formula = new_forall(
+            'a',
+            new_forall(
+                'b',
+                new_atom(
+                    new_sum(new_var('a'), new_succ(new_var('b'))),
+                    new_succ(new_sum(new_var('a'), new_var('b'))),
+                ),
+            ),
+        );
+
+        // 0
+        let term = Term::Zero;
+
+        // ∀b:(0 + Sb) = S(0 + b)
+        let expected = Ok(new_forall(
+            'b',
+            new_atom(
+                new_sum(new_zero(), new_succ(new_var('b'))),
+                new_succ(new_sum(new_zero(), new_var('b'))),
+            ),
+        ));
+
+        let actual = elim_forall(formula, term);
+
+        println!("{}", actual.clone().unwrap());
+        println!("{}", expected.clone().unwrap());
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn test_elim_forall_two_success() {
+        // ∀b:(0 + Sb) = S(0 + b)
+        let formula = new_forall(
+            'b',
+            new_atom(
+                new_sum(new_zero(), new_succ(new_var('b'))),
+                new_succ(new_sum(new_zero(), new_var('b'))),
+            ),
+        );
+
+        // (b + c)
+        let term = new_var('b') + new_var('c');
+
+        // (0 + S(b + c)) = S(0 + (b + c))
+        let expected = Ok(new_atom(
+            new_sum(new_zero(), new_succ(new_sum(new_var('b'), new_var('c')))),
+            new_succ(new_sum(new_zero(), new_sum(new_var('b'), new_var('c')))),
+        ));
+
+        let actual = elim_forall(formula, term);
+
+        println!("{}", actual.clone().unwrap());
+        println!("{}", expected.clone().unwrap());
+        assert_eq!(actual, expected);
     }
 }
