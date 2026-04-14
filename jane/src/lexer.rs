@@ -2,7 +2,7 @@ use crate::token::{Token, TokenKind};
 
 pub struct Lexer {
     source: Vec<char>,
-    pub tokens: Vec<Token>,
+    tokens: Vec<Token>,
     current: usize,
 }
 
@@ -15,32 +15,8 @@ impl Lexer {
         }
     }
 
-    pub fn scan_tokens(&mut self) -> Result<(), String> {
-        while !self.is_at_end() {
-            self.scan_token()?;
-        }
-
-        self.tokens.push(Token::new(TokenKind::EOF));
-        Ok(())
-    }
-
-    fn scan_token(&mut self) -> Result<(), String> {
-        let ch = self.advance();
-
-        if self.try_whitespace(ch)
-            || self.try_newline(ch)
-            || self.try_single_char(ch)
-            || self.try_keyword(ch)
-            || self.try_identifier(ch)
-        {
-            return Ok(());
-        }
-
-        if self.try_implies(ch)? {
-            return Ok(());
-        }
-
-        Err(format!("Unrecognized Token: {ch}"))
+    pub fn tokens(&self) -> &Vec<Token> {
+        &self.tokens
     }
 }
 
@@ -61,85 +37,82 @@ impl Lexer {
 }
 
 impl Lexer {
-    fn try_whitespace(&self, ch: char) -> bool {
-        matches!(ch, ' ' | '\t' | '\r')
-    }
-
-    fn try_newline(&mut self, ch: char) -> bool {
-        if ch == '\n' {
-            self.tokens.push(Token::new(TokenKind::Newline));
-            true
-        } else {
-            false
+    pub fn tokenize(&mut self) -> Result<(), String> {
+        while !self.is_at_end() {
+            self.generate_token()?;
         }
+
+        self.tokens.push(Token::new(TokenKind::EOF));
+
+        Ok(())
     }
 
-    fn try_single_char(&mut self, ch: char) -> bool {
+    fn generate_token(&mut self) -> Result<(), String> {
+        let ch = self.advance();
+
+        if self.is_whitespace(ch) {
+            return Ok(());
+        }
+
+        if ch == '\n' {
+            return Ok(());
+        }
+
         let kind = match ch {
+            // Terms
+            '0' => Some(TokenKind::Zero),
+            'S' => Some(TokenKind::Successor),
+
+            // Variables
+            ch if ch.is_ascii_lowercase() => Some(TokenKind::Variable(ch)),
+
+            // Syntax
+            '(' => Some(TokenKind::OpenParen),
+            ')' => Some(TokenKind::CloseParen),
+            '[' => Some(TokenKind::OpenBracket),
+            ']' => Some(TokenKind::CloseBracket),
+            '<' => Some(TokenKind::Lt),
+            '>' => Some(TokenKind::Gt),
             '\'' => Some(TokenKind::Apostrophe),
-            '(' => Some(TokenKind::LeftParen),
-            ')' => Some(TokenKind::RightParen),
             ':' => Some(TokenKind::Colon),
-            '[' => Some(TokenKind::LeftBracket),
-            ']' => Some(TokenKind::RightBracket),
-            '+' => Some(TokenKind::Plus),
-            '*' => Some(TokenKind::Times),
-            '=' => Some(TokenKind::Equals),
-            '<' => Some(TokenKind::LeftAngleBracket),
-            '>' => Some(TokenKind::RightAngleBracket),
+
+            // Operations
+            '+' => Some(TokenKind::Add),
+            '*' => Some(TokenKind::Mult),
+
+            // Logical Operators
             '~' => Some(TokenKind::Not),
             '&' => Some(TokenKind::And),
             '|' => Some(TokenKind::Or),
-            _ => None,
-        };
+            '-' => match self.peek() {
+                Some('>') => {
+                    self.advance();
+                    Some(TokenKind::Implies)
+                }
+                _ => None,
+            },
 
-        if let Some(kind) = kind {
-            self.tokens.push(Token::new(kind));
-            true
-        } else {
-            false
-        }
-    }
-
-    fn try_keyword(&mut self, ch: char) -> bool {
-        let kind = match ch {
-            '0' => Some(TokenKind::Zero),
-            'S' => Some(TokenKind::Successor),
+            // Quantifiers
             'A' => Some(TokenKind::ForAll),
             'E' => Some(TokenKind::Exists),
+
+            // Equality
+            '=' => Some(TokenKind::Equals),
+
             _ => None,
         };
 
-        if let Some(kind) = kind {
-            self.tokens.push(Token::new(kind));
-            true
-        } else {
-            false
-        }
-    }
-
-    fn try_implies(&mut self, ch: char) -> Result<bool, String> {
-        if ch != '-' {
-            return Ok(false);
-        }
-
-        match self.peek() {
-            Some('>') => {
-                self.advance();
-                self.tokens.push(Token::new(TokenKind::Implies));
-                Ok(true)
+        match kind {
+            Some(token_kind) => {
+                self.tokens.push(Token::new(token_kind));
+                Ok(())
             }
-            _ => Err("Expected '>' after '-'".to_string()),
+            None => Err(format!("Unrecognized Token: {}", ch)),
         }
     }
 
-    fn try_identifier(&mut self, ch: char) -> bool {
-        if ch.is_ascii_lowercase() {
-            self.tokens.push(Token::new(TokenKind::Identifier(ch)));
-            true
-        } else {
-            false
-        }
+    fn is_whitespace(&self, ch: char) -> bool {
+        matches!(ch, ' ' | '\t' | '\r')
     }
 }
 
@@ -150,8 +123,8 @@ mod tests {
 
     fn lex(input: &str) -> Vec<TokenKind> {
         let mut lexer = Lexer::new(input.to_string());
-        lexer.scan_tokens().unwrap();
-        lexer.tokens.into_iter().map(|t| t.get_kind()).collect()
+        lexer.tokenize().unwrap();
+        lexer.tokens.into_iter().map(|t| t.kind()).collect()
     }
 
     #[test]
@@ -161,10 +134,10 @@ mod tests {
         assert_eq!(
             tokens,
             vec![
-                TokenKind::LeftParen,
-                TokenKind::RightParen,
-                TokenKind::Plus,
-                TokenKind::Times,
+                TokenKind::OpenParen,
+                TokenKind::CloseParen,
+                TokenKind::Add,
+                TokenKind::Mult,
                 TokenKind::Equals,
                 TokenKind::EOF,
             ]
@@ -194,9 +167,9 @@ mod tests {
         assert_eq!(
             tokens,
             vec![
-                TokenKind::Identifier('a'),
-                TokenKind::Identifier('b'),
-                TokenKind::Identifier('c'),
+                TokenKind::Variable('a'),
+                TokenKind::Variable('b'),
+                TokenKind::Variable('c'),
                 TokenKind::EOF,
             ]
         );
@@ -212,19 +185,9 @@ mod tests {
     #[test]
     fn test_invalid_implies() {
         let mut lexer = Lexer::new("-".to_string());
-        let result = lexer.scan_tokens();
+        let result = lexer.tokenize();
 
         assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_newlines() {
-        let tokens = lex("\n\n");
-
-        assert_eq!(
-            tokens,
-            vec![TokenKind::Newline, TokenKind::Newline, TokenKind::EOF,]
-        );
     }
 
     #[test]
@@ -234,9 +197,9 @@ mod tests {
         assert_eq!(
             tokens,
             vec![
-                TokenKind::Identifier('a'),
-                TokenKind::Identifier('b'),
-                TokenKind::Identifier('c'),
+                TokenKind::Variable('a'),
+                TokenKind::Variable('b'),
+                TokenKind::Variable('c'),
                 TokenKind::EOF,
             ]
         );
@@ -250,10 +213,10 @@ mod tests {
             tokens,
             vec![
                 TokenKind::ForAll,
-                TokenKind::Identifier('x'),
+                TokenKind::Variable('x'),
                 TokenKind::Implies,
                 TokenKind::Successor,
-                TokenKind::Identifier('y'),
+                TokenKind::Variable('y'),
                 TokenKind::EOF,
             ]
         );
@@ -262,7 +225,7 @@ mod tests {
     #[test]
     fn test_unknown_token() {
         let mut lexer = Lexer::new("@".to_string());
-        let result = lexer.scan_tokens();
+        let result = lexer.tokenize();
 
         assert!(result.is_err());
     }

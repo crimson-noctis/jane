@@ -5,9 +5,9 @@ use jane::lexer::Lexer;
 fn main() -> Result<(), String> {
     let content = fs::read_to_string("../example/juliet.jane").expect("Failed to Read File");
     let mut scanner = Lexer::new(content);
-    scanner.scan_tokens().unwrap();
+    scanner.tokenize().unwrap();
 
-    for token in scanner.tokens {
+    for token in scanner.tokens() {
         println!("{:?}", token);
     }
 

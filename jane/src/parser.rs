@@ -12,7 +12,7 @@ impl Parser {}
 
 fn parse_term(t: &[Token]) -> Term {
     let (token, rest) = t.split_first().unwrap();
-    match token.get_kind() {
+    match token.kind() {
         TokenKind::Zero => Term::Zero,
         TokenKind::Successor => {
             let child = parse_term(rest);

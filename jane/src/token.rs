@@ -1,55 +1,69 @@
-#[derive(Clone, Debug, PartialEq, Eq)]
+// #[derive(Clone, Debug, PartialEq, Eq)]
+// pub struct Token {
+//     kind: TokenKind,
+// }
+
+// impl Token {
+//     pub fn new(kind: TokenKind) -> Token {
+//         Token { kind }
+//     }
+
+//     pub fn get_kind(&self) -> TokenKind {
+//         self.kind.clone()
+//     }
+// }
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum TokenKind {
+    // Terms
+    Zero,      // 0
+    Successor, // S
+
+    // Variables (Examples: a..z or a', b'', c''')
+    Variable(char),
+
+    // Syntax
+    OpenParen,    // (
+    CloseParen,   // )
+    Gt,           // >
+    Lt,           // <
+    OpenBracket,  // [
+    CloseBracket, // ]
+    Apostrophe,   // '
+    Colon,        // :
+
+    // Operations
+    Add,  // +
+    Mult, // •
+
+    // Logical operators
+    Not,     // ¬
+    And,     // ∧
+    Or,      // ∨
+    Implies, // ⊃
+
+    // Quantifiers
+    ForAll, // ∀
+    Exists, // ∃
+
+    // Equality
+    Equals, // =
+
+    // End markers
+    EOF,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct Token {
     kind: TokenKind,
 }
 
 impl Token {
     pub fn new(kind: TokenKind) -> Token {
-        Token { kind }
+        Self { kind }
     }
 
-    pub fn get_kind(&self) -> TokenKind {
-        self.kind.clone()
+    pub fn kind(&self) -> TokenKind {
+        self.kind
     }
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum TokenKind {
-    // Numerals
-    Zero,
-    Successor,
-
-    // Variables
-    Identifier(char),
-
-    // Punctuation
-    Apostrophe,
-    LeftParen,
-    RightParen,
-    Colon,
-    LeftBracket,
-    RightBracket,
-
-    // Operators
-    Plus,
-    Times,
-    Equals,
-    LeftAngleBracket,
-    RightAngleBracket,
-
-    // Logical Symbols
-    Not,
-    And,
-    Or,
-    Exists,
-    ForAll,
-
-    // Two character token
-    Implies,
-
-    // New Line
-    Newline,
-
-    // End of File
-    EOF,
 }
