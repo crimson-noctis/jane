@@ -1,18 +1,3 @@
-// #[derive(Clone, Debug, PartialEq, Eq)]
-// pub struct Token {
-//     kind: TokenKind,
-// }
-
-// impl Token {
-//     pub fn new(kind: TokenKind) -> Token {
-//         Token { kind }
-//     }
-
-//     pub fn get_kind(&self) -> TokenKind {
-//         self.kind.clone()
-//     }
-// }
-
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum TokenKind {
     // Terms

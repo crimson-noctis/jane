@@ -50,11 +50,7 @@ impl Lexer {
     fn generate_token(&mut self) -> Result<(), String> {
         let ch = self.advance();
 
-        if self.is_whitespace(ch) {
-            return Ok(());
-        }
-
-        if ch == '\n' {
+        if self.is_whitespace(ch) || ch == '\n' {
             return Ok(());
         }
 
