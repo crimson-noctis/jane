@@ -11,9 +11,9 @@ fn main() -> Result<(), String> {
         println!("{:?}", token);
     }
 
-    let mut parser = parser::Parser::new();
+    let mut parser = parser::Parser::new(scanner.tokens().clone());
 
-    let term = parser.parse_term(scanner.tokens());
+    let term = parser.parse_term();
 
     println!("{:?}", term);
 
