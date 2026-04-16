@@ -10,12 +10,17 @@ use crate::token::TokenKind;
 
 pub struct Parser {
     token: Vec<Token>,
+    terms: Vec<Term>,
     pos: usize,
 }
 
 impl Parser {
     pub fn new(token: Vec<Token>) -> Self {
-        Self { token, pos: 0 }
+        Self {
+            token,
+            terms: Vec::new(),
+            pos: 0,
+        }
     }
 }
 
@@ -36,6 +41,18 @@ impl Parser {
         if actual != expected {
             panic!("Expected {:?}, got {:?}", expected, actual);
         }
+    }
+
+    pub fn is_end(&self) -> bool {
+        self.token[self.pos].kind() == TokenKind::EOF
+    }
+
+    pub fn push(&mut self, term: Term) {
+        self.terms.push(term);
+    }
+
+    pub fn terms(&self) -> &Vec<Term> {
+        &self.terms
     }
 }
 
@@ -100,7 +117,7 @@ mod tests {
 
         let mut parser = Parser::new(tokens.clone());
 
-        let term = parser.parse_term(&tokens);
+        let term = parser.parse_term();
         let expected = Term::Zero;
 
         assert_eq!(term, expected);
@@ -116,7 +133,7 @@ mod tests {
 
         let mut parser = Parser::new(tokens.clone());
 
-        let term = parser.parse_term(&tokens);
+        let term = parser.parse_term();
 
         let expected = Term::Succ {
             child: Box::new(Term::Succ {

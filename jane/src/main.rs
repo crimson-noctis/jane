@@ -13,9 +13,14 @@ fn main() -> Result<(), String> {
 
     let mut parser = parser::Parser::new(scanner.tokens().clone());
 
-    let term = parser.parse_term();
+    while !parser.is_end() {
+        let term = parser.parse_term();
+        parser.push(term);
+    }
 
-    println!("{:?}", term);
+    for term in parser.terms() {
+        println!("{:#?}", term);
+    }
 
     Ok(())
 }
