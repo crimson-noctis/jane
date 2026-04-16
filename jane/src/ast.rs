@@ -121,7 +121,8 @@ impl Display for Formula {
     }
 }
 
-fn new_atom(left: Term, right: Term) -> Formula {
+#[inline]
+pub fn new_atom(left: Term, right: Term) -> Formula {
     Formula::Atom { left, right }
 }
 

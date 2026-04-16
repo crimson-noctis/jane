@@ -29,18 +29,14 @@ impl Parser {
         self.token[self.pos].kind()
     }
 
+    pub fn terms(&self) -> &Vec<Term> {
+        &self.terms
+    }
+
     pub fn advance(&mut self) -> TokenKind {
         let t = self.token[self.pos].kind();
         self.pos += 1;
         t
-    }
-
-    fn expect(&mut self, expected: TokenKind) {
-        let actual = self.advance();
-
-        if actual != expected {
-            panic!("Expected {:?}, got {:?}", expected, actual);
-        }
     }
 
     pub fn is_end(&self) -> bool {
@@ -51,8 +47,12 @@ impl Parser {
         self.terms.push(term);
     }
 
-    pub fn terms(&self) -> &Vec<Term> {
-        &self.terms
+    fn expect(&mut self, expected: TokenKind) {
+        let actual = self.advance();
+
+        if actual != expected {
+            panic!("Expected {:?}, got {:?}", expected, actual);
+        }
     }
 }
 
@@ -98,8 +98,29 @@ impl Parser {
         }
     }
 
-    pub fn parse_formula(&mut self, tokens: &[Token]) -> Formula {
-        todo!()
+    pub fn parse_formula(&mut self) -> Formula {
+        match self.peek() {
+            TokenKind::OpenParen => {
+                self.advance();
+
+                let left = self.parse_term();
+
+                let formula = self.advance();
+
+                let right = self.parse_term();
+
+                self.expect(TokenKind::CloseParen);
+
+                match formula {
+                    TokenKind::Equals => Formula::Atom { left, right },
+                    _ => panic!("Invalid Formula"),
+                }
+            }
+            _ => {
+                println!("{:#?}", self.peek());
+                panic!("ERROR");
+            }
+        }
     }
 }
 
