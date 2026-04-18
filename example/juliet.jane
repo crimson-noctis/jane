@@ -1,3 +1,5 @@
 Ea: ~(S0 + SS0) = (SS0 + S0)
 Ab: (SS0 + S0) = (S0 + SS0)
 (SS0 + SS0) = (SS0 + SS0)
+<(SS0 + SS0) = (SS0 + SS0) & (SS0 + SS0) = (SS0 + SS0)>
+<(SS0 + SS0) = (SS0 + SS0) -> (SS0 + SS0) = (SS0 + SS0)>

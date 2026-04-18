@@ -32,6 +32,7 @@ impl Parser {
             self.token[self.pos].kind()
         }
     }
+
     pub fn terms(&self) -> &Vec<Term> {
         &self.terms
     }
@@ -52,7 +53,6 @@ impl Parser {
 
     fn expect(&mut self, expected: TokenKind) {
         let actual = self.advance();
-
         if actual != expected {
             panic!("Expected {:?}, got {:?}", expected, actual);
         }
@@ -82,9 +82,7 @@ impl Parser {
                 self.advance();
 
                 let left = self.parse_term();
-
                 let op = self.advance();
-
                 let right = self.parse_term();
 
                 self.expect(TokenKind::CloseParen);
@@ -92,7 +90,6 @@ impl Parser {
                 match op {
                     TokenKind::Add => new_sum(left, right),
                     TokenKind::Mult => new_product(left, right),
-
                     _ => panic!("Invalid Expression"),
                 }
             }
@@ -103,22 +100,32 @@ impl Parser {
 
     pub fn parse_formula(&mut self) -> Formula {
         match self.peek() {
-            // TokenKind::OpenParen => {
-            //     self.advance();
+            TokenKind::Lt => {
+                self.advance();
 
-            //     let left = self.parse_term();
+                let left = self.parse_formula();
+                let op = self.advance();
+                let right = self.parse_formula();
 
-            //     let formula = self.advance();
+                self.expect(TokenKind::Gt);
 
-            //     let right = self.parse_term();
+                match op {
+                    TokenKind::And => Formula::And {
+                        left: Box::new(left),
+                        right: Box::new(right),
+                    },
+                    TokenKind::Or => Formula::Or {
+                        left: Box::new(left),
+                        right: Box::new(right),
+                    },
+                    TokenKind::Implies => Formula::Implies {
+                        left: Box::new(left),
+                        right: Box::new(right),
+                    },
+                    _ => panic!("Expected binary connective, got {:?}", op),
+                }
+            }
 
-            //     self.expect(TokenKind::CloseParen);
-
-            //     match formula {
-            //         TokenKind::Equals => Formula::Atom { left, right },
-            //         _ => panic!("Invalid Formula"),
-            //     }
-            // }
             TokenKind::Not => {
                 self.advance();
 
@@ -139,12 +146,12 @@ impl Parser {
                     _ => panic!("Expected Variable After E"),
                 };
 
-                let colon = self.advance();
+                self.expect(TokenKind::Colon);
 
                 let body = self.parse_formula();
 
                 Formula::Exists {
-                    var: var,
+                    var,
                     body: Box::new(body),
                 }
             }
@@ -156,15 +163,15 @@ impl Parser {
 
                 let var = match var_term {
                     Term::Var { var } => var,
-                    _ => panic!("Expected Variable After E"),
+                    _ => panic!("Expected Variable After A"),
                 };
 
-                let colon = self.advance();
+                self.expect(TokenKind::Colon);
 
                 let body = self.parse_formula();
 
                 Formula::ForAll {
-                    var: var,
+                    var,
                     body: Box::new(body),
                 }
             }
@@ -180,9 +187,7 @@ impl Parser {
 
                         Formula::Atom { left, right }
                     }
-                    _ => {
-                        panic!("Expected formula, got {:?}", self.peek());
-                    }
+                    _ => panic!("Expected =, got {:?}", self.peek()),
                 }
             }
         }
@@ -191,22 +196,16 @@ impl Parser {
 
 #[cfg(test)]
 mod tests {
-    use crate::{
-        ast::{Term, new_succ},
-        parser::Parser,
-        token::{Token, TokenKind},
-    };
+    use crate::ast::{Formula, Term, new_succ, new_sum, new_var, new_zero};
+    use crate::parser::Parser;
+    use crate::token::{Token, TokenKind};
 
     #[test]
     fn test_parse_zero() {
         let tokens = vec![Token::new(TokenKind::Zero), Token::new(TokenKind::EOF)];
-
-        let mut parser = Parser::new(tokens.clone());
-
+        let mut parser = Parser::new(tokens);
         let term = parser.parse_term();
-        let expected = Term::Zero;
-
-        assert_eq!(term, expected);
+        assert_eq!(term, Term::Zero);
     }
 
     #[test]
@@ -217,20 +216,175 @@ mod tests {
             Token::new(TokenKind::Zero),
             Token::new(TokenKind::EOF),
         ];
-
-        let mut parser = Parser::new(tokens.clone());
-
+        let mut parser = Parser::new(tokens);
         let term = parser.parse_term();
-
         let expected = Term::Succ {
             child: Box::new(Term::Succ {
                 child: Box::new(Term::Zero),
             }),
         };
-
-        assert_eq!(term, expected)
+        assert_eq!(term, expected);
     }
 
     #[test]
-    fn test_parse_var() {}
+    fn test_parse_var() {
+        let tokens = vec![
+            Token::new(TokenKind::Variable('a')),
+            Token::new(TokenKind::EOF),
+        ];
+        let mut parser = Parser::new(tokens);
+        let term = parser.parse_term();
+        assert_eq!(term, Term::Var { var: 'a' });
+    }
+
+    #[test]
+    fn test_parse_atom() {
+        // S0 = 0
+        let tokens = vec![
+            Token::new(TokenKind::Successor),
+            Token::new(TokenKind::Zero),
+            Token::new(TokenKind::Equals),
+            Token::new(TokenKind::Zero),
+            Token::new(TokenKind::EOF),
+        ];
+        let mut parser = Parser::new(tokens);
+        let formula = parser.parse_formula();
+        let expected = Formula::Atom {
+            left: new_succ(new_zero()),
+            right: new_zero(),
+        };
+        assert_eq!(formula, expected);
+    }
+
+    #[test]
+    fn test_parse_negation() {
+        // ~S0 = 0
+        let tokens = vec![
+            Token::new(TokenKind::Not),
+            Token::new(TokenKind::Successor),
+            Token::new(TokenKind::Zero),
+            Token::new(TokenKind::Equals),
+            Token::new(TokenKind::Zero),
+            Token::new(TokenKind::EOF),
+        ];
+        let mut parser = Parser::new(tokens);
+        let formula = parser.parse_formula();
+        let expected = Formula::Negation {
+            child: Box::new(Formula::Atom {
+                left: new_succ(new_zero()),
+                right: new_zero(),
+            }),
+        };
+        assert_eq!(formula, expected);
+    }
+
+    #[test]
+    fn test_parse_and() {
+        // <S0 = 0 & 0 = 0>
+        let tokens = vec![
+            Token::new(TokenKind::Lt),
+            Token::new(TokenKind::Successor),
+            Token::new(TokenKind::Zero),
+            Token::new(TokenKind::Equals),
+            Token::new(TokenKind::Zero),
+            Token::new(TokenKind::And),
+            Token::new(TokenKind::Zero),
+            Token::new(TokenKind::Equals),
+            Token::new(TokenKind::Zero),
+            Token::new(TokenKind::Gt),
+            Token::new(TokenKind::EOF),
+        ];
+        let mut parser = Parser::new(tokens);
+        let formula = parser.parse_formula();
+        let expected = Formula::And {
+            left: Box::new(Formula::Atom {
+                left: new_succ(new_zero()),
+                right: new_zero(),
+            }),
+            right: Box::new(Formula::Atom {
+                left: new_zero(),
+                right: new_zero(),
+            }),
+        };
+        assert_eq!(formula, expected);
+    }
+
+    #[test]
+    fn test_parse_implies() {
+        // <0 = 0 -> S0 = 0>
+        let tokens = vec![
+            Token::new(TokenKind::Lt),
+            Token::new(TokenKind::Zero),
+            Token::new(TokenKind::Equals),
+            Token::new(TokenKind::Zero),
+            Token::new(TokenKind::Implies),
+            Token::new(TokenKind::Successor),
+            Token::new(TokenKind::Zero),
+            Token::new(TokenKind::Equals),
+            Token::new(TokenKind::Zero),
+            Token::new(TokenKind::Gt),
+            Token::new(TokenKind::EOF),
+        ];
+        let mut parser = Parser::new(tokens);
+        let formula = parser.parse_formula();
+        let expected = Formula::Implies {
+            left: Box::new(Formula::Atom {
+                left: new_zero(),
+                right: new_zero(),
+            }),
+            right: Box::new(Formula::Atom {
+                left: new_succ(new_zero()),
+                right: new_zero(),
+            }),
+        };
+        assert_eq!(formula, expected);
+    }
+
+    #[test]
+    fn test_parse_exists() {
+        // Ea: a = 0
+        let tokens = vec![
+            Token::new(TokenKind::Exists),
+            Token::new(TokenKind::Variable('a')),
+            Token::new(TokenKind::Colon),
+            Token::new(TokenKind::Variable('a')),
+            Token::new(TokenKind::Equals),
+            Token::new(TokenKind::Zero),
+            Token::new(TokenKind::EOF),
+        ];
+        let mut parser = Parser::new(tokens);
+        let formula = parser.parse_formula();
+        let expected = Formula::Exists {
+            var: 'a',
+            body: Box::new(Formula::Atom {
+                left: new_var('a'),
+                right: new_zero(),
+            }),
+        };
+        assert_eq!(formula, expected);
+    }
+
+    #[test]
+    fn test_parse_forall() {
+        // Aa: a = 0
+        let tokens = vec![
+            Token::new(TokenKind::ForAll),
+            Token::new(TokenKind::Variable('a')),
+            Token::new(TokenKind::Colon),
+            Token::new(TokenKind::Variable('a')),
+            Token::new(TokenKind::Equals),
+            Token::new(TokenKind::Zero),
+            Token::new(TokenKind::EOF),
+        ];
+        let mut parser = Parser::new(tokens);
+        let formula = parser.parse_formula();
+        let expected = Formula::ForAll {
+            var: 'a',
+            body: Box::new(Formula::Atom {
+                left: new_var('a'),
+                right: new_zero(),
+            }),
+        };
+        assert_eq!(formula, expected);
+    }
 }
