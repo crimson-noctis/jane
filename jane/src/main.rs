@@ -4,14 +4,10 @@ use jane::{lexer::Lexer, parser};
 
 fn main() -> Result<(), String> {
     let content = fs::read_to_string("../example/juliet.jane").expect("Failed to Read File");
-    let mut scanner = Lexer::new(content);
-    scanner.tokenize().unwrap();
+    let mut lexer = Lexer::new(content);
+    lexer.tokenize().unwrap();
 
-    for token in scanner.tokens() {
-        println!("{:?}", token);
-    }
-
-    let mut parser = parser::Parser::new(scanner.tokens().clone());
+    let mut parser = parser::Parser::new(lexer.tokens().clone());
 
     // while !parser.is_end() {
     //     let formula = parser.parse_formula();

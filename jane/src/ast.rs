@@ -101,7 +101,7 @@ pub enum Formula {
         var: char,
         body: Box<Formula>,
     },
-    Forall {
+    ForAll {
         var: char,
         body: Box<Formula>,
     },
@@ -115,7 +115,7 @@ impl Display for Formula {
             Self::And { left, right } => write!(f, "({} ∧ {})", left, right),
             Self::Or { left, right } => write!(f, "({} ∨ {})", left, right),
             Self::Implies { left, right } => write!(f, "({} -> {})", left, right),
-            Self::Forall { var, body } => write!(f, "(∀{}: {})", var, body),
+            Self::ForAll { var, body } => write!(f, "(∀{}: {})", var, body),
             Self::Exists { var, body } => write!(f, "(∃{}: {})", var, body),
         }
     }
@@ -161,7 +161,7 @@ fn new_exists(var: char, body: Formula) -> Formula {
 }
 
 fn new_forall(var: char, body: Formula) -> Formula {
-    Formula::Forall {
+    Formula::ForAll {
         var,
         body: Box::new(body),
     }
@@ -425,12 +425,12 @@ fn replace_var_in_formula(p: Formula, from: char, to: &Term) -> Formula {
             replace_var_in_formula(*right, from, to),
         ),
         Formula::Exists { var, body } => new_exists(var, replace_var_in_formula(*body, from, to)),
-        Formula::Forall { var, body } => new_forall(var, replace_var_in_formula(*body, from, to)),
+        Formula::ForAll { var, body } => new_forall(var, replace_var_in_formula(*body, from, to)),
     }
 }
 
 fn elim_forall(p: Formula, t: Term) -> Result<Formula, String> {
-    if let Formula::Forall { var, body } = p {
+    if let Formula::ForAll { var, body } = p {
         Ok(replace_var_in_formula(*body, var, &t))
     } else {
         Err("Error.".to_string())
@@ -445,7 +445,7 @@ fn intro_interchange(mut p: Formula) -> Result<Formula, String> {
     }
 
     p = match p {
-        Formula::Forall { var, body } => new_exists(var, invert(*body)),
+        Formula::ForAll { var, body } => new_exists(var, invert(*body)),
         Formula::Exists { var, body } => new_forall(var, invert(*body)),
         _ => return Err("Fail.".to_string()),
     };

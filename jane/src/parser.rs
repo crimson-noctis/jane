@@ -26,9 +26,12 @@ impl Parser {
 
 impl Parser {
     pub fn peek(&self) -> TokenKind {
-        self.token[self.pos].kind()
+        if self.pos >= self.token.len() {
+            TokenKind::EOF
+        } else {
+            self.token[self.pos].kind()
+        }
     }
-
     pub fn terms(&self) -> &Vec<Term> {
         &self.terms
     }
@@ -116,6 +119,57 @@ impl Parser {
                     _ => panic!("Invalid Formula"),
                 }
             }
+
+            TokenKind::Not => {
+                self.advance();
+
+                let child = self.parse_formula();
+
+                Formula::Negation {
+                    child: Box::new(child),
+                }
+            }
+
+            TokenKind::Exists => {
+                self.advance();
+
+                let var_term = self.parse_term();
+
+                let var = match var_term {
+                    Term::Var { var } => var,
+                    _ => panic!("Expected Variable After E"),
+                };
+
+                let colon = self.advance();
+
+                let body = self.parse_formula();
+
+                Formula::Exists {
+                    var: var,
+                    body: Box::new(body),
+                }
+            }
+
+            TokenKind::ForAll => {
+                self.advance();
+
+                let var_term = self.parse_term();
+
+                let var = match var_term {
+                    Term::Var { var } => var,
+                    _ => panic!("Expected Variable After E"),
+                };
+
+                let colon = self.advance();
+
+                let body = self.parse_formula();
+
+                Formula::ForAll {
+                    var: var,
+                    body: Box::new(body),
+                }
+            }
+
             _ => {
                 println!("{:#?}", self.peek());
                 panic!("ERROR");
@@ -134,7 +188,7 @@ mod tests {
 
     #[test]
     fn test_parse_zero() {
-        let tokens = vec![Token::new(TokenKind::Zero)];
+        let tokens = vec![Token::new(TokenKind::Zero), Token::new(TokenKind::EOF)];
 
         let mut parser = Parser::new(tokens.clone());
 
@@ -150,6 +204,7 @@ mod tests {
             Token::new(TokenKind::Successor),
             Token::new(TokenKind::Successor),
             Token::new(TokenKind::Zero),
+            Token::new(TokenKind::EOF),
         ];
 
         let mut parser = Parser::new(tokens.clone());
