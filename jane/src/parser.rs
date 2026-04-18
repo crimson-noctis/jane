@@ -103,23 +103,22 @@ impl Parser {
 
     pub fn parse_formula(&mut self) -> Formula {
         match self.peek() {
-            TokenKind::OpenParen => {
-                self.advance();
+            // TokenKind::OpenParen => {
+            //     self.advance();
 
-                let left = self.parse_term();
+            //     let left = self.parse_term();
 
-                let formula = self.advance();
+            //     let formula = self.advance();
 
-                let right = self.parse_term();
+            //     let right = self.parse_term();
 
-                self.expect(TokenKind::CloseParen);
+            //     self.expect(TokenKind::CloseParen);
 
-                match formula {
-                    TokenKind::Equals => Formula::Atom { left, right },
-                    _ => panic!("Invalid Formula"),
-                }
-            }
-
+            //     match formula {
+            //         TokenKind::Equals => Formula::Atom { left, right },
+            //         _ => panic!("Invalid Formula"),
+            //     }
+            // }
             TokenKind::Not => {
                 self.advance();
 
@@ -171,8 +170,20 @@ impl Parser {
             }
 
             _ => {
-                println!("{:#?}", self.peek());
-                panic!("ERROR");
+                let left = self.parse_term();
+
+                match self.peek() {
+                    TokenKind::Equals => {
+                        self.advance();
+
+                        let right = self.parse_term();
+
+                        Formula::Atom { left, right }
+                    }
+                    _ => {
+                        panic!("Expected formula, got {:?}", self.peek());
+                    }
+                }
             }
         }
     }

@@ -9,19 +9,10 @@ fn main() -> Result<(), String> {
 
     let mut parser = parser::Parser::new(lexer.tokens().clone());
 
-    // while !parser.is_end() {
-    //     let formula = parser.parse_formula();
-
-    //     println!("{:#?}", formula);
-    // }
-
-    let formula = parser.parse_formula();
-
-    println!("{:#?}", formula);
-
-    let formula = parser.parse_formula();
-
-    println!("{:#?}", formula);
+    while !parser.is_end() {
+        let formula = parser.parse_formula();
+        println!("{:#?}", formula);
+    }
 
     Ok(())
 }
