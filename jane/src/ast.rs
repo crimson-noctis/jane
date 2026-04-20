@@ -1,4 +1,4 @@
-use std::{fmt::Display, num::FpCategory, ops};
+use std::{fmt::Display, ops};
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Term {
@@ -126,52 +126,59 @@ pub fn new_atom(left: Term, right: Term) -> Formula {
     Formula::Atom { left, right }
 }
 
-fn new_negation(child: Formula) -> Formula {
+#[inline]
+pub fn new_negation(child: Formula) -> Formula {
     Formula::Negation {
         child: Box::new(child),
     }
 }
 
-fn new_and(left: Formula, right: Formula) -> Formula {
+#[inline]
+pub fn new_and(left: Formula, right: Formula) -> Formula {
     Formula::And {
         left: Box::new(left),
         right: Box::new(right),
     }
 }
 
-fn new_or(left: Formula, right: Formula) -> Formula {
+#[inline]
+pub fn new_or(left: Formula, right: Formula) -> Formula {
     Formula::Or {
         left: Box::new(left),
         right: Box::new(right),
     }
 }
 
-fn new_implies(left: Formula, right: Formula) -> Formula {
+#[inline]
+pub fn new_implies(left: Formula, right: Formula) -> Formula {
     Formula::Implies {
         left: Box::new(left),
         right: Box::new(right),
     }
 }
 
-fn new_exists(var: char, body: Formula) -> Formula {
+#[inline]
+pub fn new_exists(var: char, body: Formula) -> Formula {
     Formula::Exists {
         var,
         body: Box::new(body),
     }
 }
 
-fn new_forall(var: char, body: Formula) -> Formula {
+#[inline]
+pub fn new_forall(var: char, body: Formula) -> Formula {
     Formula::ForAll {
         var,
         body: Box::new(body),
     }
 }
 
-fn intro_conjunction(p: Formula, q: Formula) -> Formula {
+pub fn intro_conjunction(p: Formula, q: Formula) -> Formula {
     new_and(p, q)
 }
 
-enum Choice {
+#[derive(Debug)]
+pub enum Choice {
     Left,
     Right,
 }
@@ -315,7 +322,7 @@ fn intro_de_morgan(mut p: Formula) -> Result<Formula, String> {
 }
 
 #[rustfmt::skip]
-fn intro_axiom(n: usize) -> Result<Formula, String> {
+pub fn intro_axiom(n: usize) -> Result<Formula, String> {
     let axiom_one = new_forall('a',
                       new_negation(
                         new_atom(
@@ -411,7 +418,7 @@ fn replace_var_in_formula(p: Formula, from: char, to: &Term) -> Formula {
             replace_var_in_term(&left, from, to),
             replace_var_in_term(&right, from, to),
         ),
-        Formula::Negation { child } => replace_var_in_formula(*child, from, to),
+        Formula::Negation { child } => new_negation(replace_var_in_formula(*child, from, to)),
         Formula::And { left, right } => new_and(
             replace_var_in_formula(*left, from, to),
             replace_var_in_formula(*right, from, to),
@@ -429,7 +436,7 @@ fn replace_var_in_formula(p: Formula, from: char, to: &Term) -> Formula {
     }
 }
 
-fn elim_forall(p: Formula, t: Term) -> Result<Formula, String> {
+pub fn elim_forall(p: Formula, t: Term) -> Result<Formula, String> {
     if let Formula::ForAll { var, body } = p {
         Ok(replace_var_in_formula(*body, var, &t))
     } else {
