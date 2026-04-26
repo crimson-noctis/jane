@@ -111,12 +111,12 @@ impl Display for Formula {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Atom { left, right } => write!(f, "({} = {})", left, right),
-            Self::Negation { child } => write!(f, "¬({})", child),
+            Self::Negation { child } => write!(f, "¬{}", child),
             Self::And { left, right } => write!(f, "({} ∧ {})", left, right),
             Self::Or { left, right } => write!(f, "({} ∨ {})", left, right),
             Self::Implies { left, right } => write!(f, "({} -> {})", left, right),
-            Self::ForAll { var, body } => write!(f, "(∀{}: {})", var, body),
-            Self::Exists { var, body } => write!(f, "(∃{}: {})", var, body),
+            Self::ForAll { var, body } => write!(f, "∀{}: {}", var, body),
+            Self::Exists { var, body } => write!(f, "∃{}: {}", var, body),
         }
     }
 }
@@ -321,8 +321,19 @@ fn intro_de_morgan(mut p: Formula) -> Result<Formula, String> {
     Ok(p)
 }
 
+pub fn intro_induction(p: Formula, q: Formula) -> Result<Formula, String> {
+    let Formula::ForAll { var, body } = p else {
+        return Err("Formula s must be of the form ∀a: ⟨p ⊃ q⟩".to_string());
+    };
+    let Formula::Implies { left, right } = *body else {
+        return Err("Body must be an implication".to_string());
+    };
+    return Err("Body must be an implication".to_string());
+}
+
 #[rustfmt::skip]
 pub fn intro_axiom(n: usize) -> Result<Formula, String> {
+    // ∀a: ¬(Sa = 0)
     let axiom_one = new_forall('a',
                       new_negation(
                         new_atom(
@@ -330,6 +341,7 @@ pub fn intro_axiom(n: usize) -> Result<Formula, String> {
                             new_var('a')), 
                           new_zero())));
 
+    // ∀a: (a + 0) = a
     let axiom_two = new_forall('a', 
                       new_atom(
                         new_sum(
@@ -337,6 +349,7 @@ pub fn intro_axiom(n: usize) -> Result<Formula, String> {
                           new_zero()), 
                         new_var('a')));
     
+    // ∀a: ∀b: (a + Sb) = S(a + b)
     let axiom_three = new_forall('a',
                         new_forall('b',
                           new_atom(
@@ -348,6 +361,7 @@ pub fn intro_axiom(n: usize) -> Result<Formula, String> {
                                 new_var('a'),
                                 new_var('b'))))));
     
+    // ∀a: (a × 0) = 0
     let axiom_four = new_forall('a', 
                        new_atom(
                          new_product(
@@ -355,6 +369,7 @@ pub fn intro_axiom(n: usize) -> Result<Formula, String> {
                            new_zero()),
                          new_zero()));
     
+    // ∀a: ∀b: (a × Sb) = ((a × b) + a)
     let axiom_five = new_forall('a',
                        new_forall('b',
                          new_atom(
@@ -378,9 +393,44 @@ pub fn intro_axiom(n: usize) -> Result<Formula, String> {
     }
 }
 
-fn intro_exists(p: Formula) -> Formula {
-    todo!();
+pub fn list_axioms() -> Vec<String> {
+    let mut vec = Vec::new();
+    for i in 1..=5 {
+        let axiom = intro_axiom(i).expect("This should be a valid axiom index");
+        vec.push(format!("{}: {}", i, axiom));
+    }
+    vec
 }
+
+fn replace_term_with_var_in_term(t: Term, v: char, p: Term) -> Term {
+    // TODO: Check that variables in term are free.
+    if t == p {
+        new_var(v)
+    } else {
+        match p {
+            Term::Zero => Term::Zero,
+            Term::Var { var } => Term::Var { var },
+            Term::Succ { child } => new_succ(replace_term_with_var_in_term(t, v, *child)),
+            Term::Sum { left, right } => new_sum(
+                replace_term_with_var_in_term(t.clone(), v, *left),
+                replace_term_with_var_in_term(t, v, *right),
+            ),
+            Term::Product { left, right } => new_product(
+                replace_term_with_var_in_term(t.clone(), v, *left),
+                replace_term_with_var_in_term(t, v, *right),
+            ),
+        }
+    }
+}
+
+// fn replace_term_with_var_in_formula(t: Term, v: char, p: Formula) -> Formula {
+//     // TODO: Check that variables in term are free.
+// }
+
+// fn intro_exists(t: Term, v: char, p: Formula) -> Formula {
+//     // TODO: Check that variables in term are free.
+//     new_exists(v, replace_term_with_var_in_formula(t, v, p))
+// }
 
 fn elim_exists(p: Formula) -> Formula {
     todo!();
@@ -390,45 +440,45 @@ fn intro_forall(p: Formula) -> Formula {
     todo!();
 }
 
-fn replace_var_in_term(p: &Term, from: char, to: &Term) -> Term {
+fn replace_var_in_term(p: Term, from: char, to: Term) -> Term {
     match p {
         Term::Zero => new_zero(),
         Term::Var { var } => {
-            if *var == from {
+            if var == from {
                 to.clone()
             } else {
-                new_var(*var)
+                new_var(var)
             }
         }
-        Term::Succ { child } => new_succ(replace_var_in_term(child, from, to)),
+        Term::Succ { child } => new_succ(replace_var_in_term(*child, from, to)),
         Term::Sum { left, right } => new_sum(
-            replace_var_in_term(left, from, to),
-            replace_var_in_term(right, from, to),
+            replace_var_in_term(*left, from, to.clone()),
+            replace_var_in_term(*right, from, to),
         ),
         Term::Product { left, right } => new_product(
-            replace_var_in_term(left, from, to),
-            replace_var_in_term(right, from, to),
+            replace_var_in_term(*left, from, to.clone()),
+            replace_var_in_term(*right, from, to),
         ),
     }
 }
 
-fn replace_var_in_formula(p: Formula, from: char, to: &Term) -> Formula {
+fn replace_var_in_formula(p: Formula, from: char, to: Term) -> Formula {
     match p {
         Formula::Atom { left, right } => new_atom(
-            replace_var_in_term(&left, from, to),
-            replace_var_in_term(&right, from, to),
+            replace_var_in_term(left, from, to.clone()),
+            replace_var_in_term(right, from, to),
         ),
         Formula::Negation { child } => new_negation(replace_var_in_formula(*child, from, to)),
         Formula::And { left, right } => new_and(
-            replace_var_in_formula(*left, from, to),
+            replace_var_in_formula(*left, from, to.clone()),
             replace_var_in_formula(*right, from, to),
         ),
         Formula::Or { left, right } => new_or(
-            replace_var_in_formula(*left, from, to),
+            replace_var_in_formula(*left, from, to.clone()),
             replace_var_in_formula(*right, from, to),
         ),
         Formula::Implies { left, right } => new_implies(
-            replace_var_in_formula(*left, from, to),
+            replace_var_in_formula(*left, from, to.clone()),
             replace_var_in_formula(*right, from, to),
         ),
         Formula::Exists { var, body } => new_exists(var, replace_var_in_formula(*body, from, to)),
@@ -438,7 +488,7 @@ fn replace_var_in_formula(p: Formula, from: char, to: &Term) -> Formula {
 
 pub fn elim_forall(p: Formula, t: Term) -> Result<Formula, String> {
     if let Formula::ForAll { var, body } = p {
-        Ok(replace_var_in_formula(*body, var, &t))
+        Ok(replace_var_in_formula(*body, var, t))
     } else {
         Err("Error.".to_string())
     }
@@ -924,5 +974,18 @@ mod tests {
         println!("{}", actual.clone().unwrap());
         println!("{}", expected.clone().unwrap());
         assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn test_specification_restriction() {
+        // The term which replaces u must not contain any variable that is quantified in x.
+        // todo!();
+    }
+
+    #[test]
+    fn test_generalization_restriction() {
+        // Restriction: No generalization is allowed in a subproof on any
+        // variable which appeared free in the subproof's premise.
+        // todo!();
     }
 }
