@@ -5,9 +5,15 @@ use std::io::Write;
 use jane::ast::Choice;
 use jane::ast::Formula;
 use jane::ast::Term;
+use jane::ast::elim_conjunction;
 use jane::ast::elim_forall;
+use jane::ast::elim_succ;
 use jane::ast::intro_axiom;
 use jane::ast::intro_conjunction;
+use jane::ast::intro_induction;
+use jane::ast::intro_succ;
+use jane::ast::intro_symmetry;
+use jane::ast::intro_transitivity;
 use jane::ast::list_axioms;
 use jane::ast::new_succ;
 use jane::ast::new_zero;
@@ -19,12 +25,13 @@ use jane::parser::Parser;
 // TODO: Tactics
 // TODO: Readline support
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 enum Justification {
     Axiom,
+    Premise,
     IntroConjunction(usize, usize),
     ElimConjunction(usize, Choice),
-    IntroImplies,
+    IntroImplies(usize, usize),
     ElimImplies(usize, usize),
     IntroForAll,
     ElimForAll(usize, Term),
@@ -35,7 +42,6 @@ enum Justification {
     DeMorgan(usize),
     Contrapositive(usize),
     Interchange(usize),
-    Premise,
     Induction(usize, usize),
     Symmetry(usize),
     Transivity(usize, usize),
@@ -53,14 +59,28 @@ impl Display for Justification {
             Self::ElimConjunction(line_num, _) => {
                 write!(f, "Elim ∧ ({})", line_num)
             }
+            Self::IntroForAll => todo!(),
             Self::ElimForAll(line_number, term) => {
                 write!(f, "Elim ∀ at {} with {}", line_number, term)
             }
-            _ => todo!(),
+            Self::IntroExists => todo!(),
+            Self::ElimExists => todo!(),
+            Self::IntroSucc(l) => write!(f, "Add S to line {}", l),
+            Self::ElimSucc(l) => write!(f, "Drop S from line {}", l),
+            Self::Symmetry(_) => write!(f, "Symmetry"),
+            Self::Transivity(_, _) => write!(f, "Transivity"),
+            Self::IntroImplies(_, _) => todo!(),
+            Self::ElimImplies(_, _) => todo!(),
+            Self::DeMorgan(_) => todo!(),
+            Self::Contrapositive(_) => todo!(),
+            Self::Interchange(_) => todo!(),
+            Self::Induction(p, q) => write!(f, "Induction lines ({}, {})", p, q),
+            Self::CarryOver(_) => todo!(),
         }
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct Theorem {
     body: Formula,
     reason: Justification,
@@ -79,8 +99,17 @@ fn parse_str_to_formula(f: &str) -> Formula {
 
     let mut parser = Parser::new(tokens.clone());
 
-    let formula = parser.parse_formula();
-    formula
+    parser.parse_formula()
+}
+
+fn parse_str_to_term(f: &str) -> Term {
+    let mut lexer = Lexer::new(f.to_string());
+    lexer.tokenize().unwrap();
+    let tokens = lexer.tokens();
+
+    let mut parser = Parser::new(tokens.clone());
+
+    parser.parse_term()
 }
 
 pub struct Repl {
@@ -133,6 +162,11 @@ impl Repl {
             new_theorem,
             Justification::IntroConjunction(4, 5),
         ));
+        let new_theorem = elim_forall(self.theorems[1].body.clone(), Term::Zero).unwrap();
+        self.push_theorem(Theorem::new(
+            new_theorem,
+            Justification::ElimForAll(2, Term::Zero),
+        ));
     }
 
     fn process_command(&mut self, cmd: &str) -> Result<(), String> {
@@ -147,19 +181,103 @@ impl Repl {
             ["quit" | "q"] => self.should_quit = true,
             ["list" | "ls"] => self.list_theorems(),
             ["help" | "commands"] => self.print_help(),
-            ["axioms"] => println!("{}\n", list_axioms().join("\n")),
+            ["undo"] => todo!("undo"),
+            ["axiom" | "axioms"] => println!("{}\n", list_axioms().join("\n")),
+            ["push"] => {
+                println!("[");
+                self.indentation_level += 1;
+            }
+            ["pop"] => {
+                if self.indentation_level > 0 {
+                    println!("]");
+                    self.indentation_level -= 1;
+                }
+            }
             // Tactics
-            ["premise", formula_str] => {
-                println!("{}", formula_str);
-                let formula = parse_str_to_formula(formula_str);
+            ["premise", rest @ ..] => {
+                if rest.is_empty() {
+                    return Err("Usage: premise <formula>".to_string());
+                }
+                let formula_str = rest.join(" ");
+                let formula = parse_str_to_formula(&formula_str);
                 self.push_theorem(Theorem {
                     body: formula,
                     reason: Justification::Premise,
                 });
                 self.list_last_theorem();
             }
-            ["intro", "and" | "conjunction"] | ["joining"] => todo!("intro and"),
-            ["elim", "and" | "conjunction"] | ["seperation"] => todo!("elim and"),
+            ["intro", "and" | "conjunction", p, q] | ["joining", p, q] => {
+                let p_num = p.parse::<usize>().unwrap();
+                let theorem_p = self.theorems[p_num - 1].clone();
+                let q_num = q.parse::<usize>().unwrap();
+                let theorem_q = self.theorems[q_num - 1].clone();
+                let formula = intro_conjunction(theorem_p.body, theorem_q.body);
+                self.push_theorem(Theorem::new(
+                    formula,
+                    Justification::IntroConjunction(p_num, q_num),
+                ));
+                self.list_last_theorem();
+            }
+            ["elim", "and" | "conjunction", p, c] | ["seperation", p, c] => {
+                let choice = match *c {
+                    "l" | "left" | "1" => Choice::Left,
+                    "r" | "right" | "2" => Choice::Right,
+                    _ => return Err("Not a valid choice".to_string()),
+                };
+                let p_num = p.parse::<usize>().unwrap();
+                let theorem_p = self.theorems[p_num - 1].clone();
+                let formula = elim_conjunction(theorem_p.body, choice).unwrap();
+                self.push_theorem(Theorem::new(
+                    formula,
+                    Justification::ElimConjunction(p_num, choice),
+                ));
+                self.list_last_theorem();
+            }
+            ["intro" | "add", "succ", p] => {
+                let p_num = p.parse::<usize>().unwrap();
+                let theorem_p = self.theorems[p_num - 1].clone();
+                let formula = intro_succ(theorem_p.body).unwrap();
+                self.push_theorem(Theorem::new(formula, Justification::IntroSucc(p_num)));
+                self.list_last_theorem();
+            }
+            ["elim" | "drop", "succ", p] => {
+                let p_num = p.parse::<usize>().unwrap();
+                let theorem_p = self.theorems[p_num - 1].clone();
+                let formula = elim_succ(theorem_p.body).unwrap();
+                self.push_theorem(Theorem::new(formula, Justification::ElimSucc(p_num)));
+                self.list_last_theorem();
+            }
+            ["symmetry", p] => {
+                let p_num = p.parse::<usize>().unwrap();
+                let theorem_p = self.theorems[p_num - 1].clone();
+                let formula = intro_symmetry(theorem_p.body.clone()).unwrap();
+                self.push_theorem(Theorem::new(formula, Justification::Symmetry(p_num)));
+                self.list_last_theorem();
+            }
+            ["transivity", p, q] => {
+                let p_num = p.parse::<usize>().unwrap();
+                let theorem_p = self.theorems[p_num - 1].clone();
+                let q_num = q.parse::<usize>().unwrap();
+                let theorem_q = self.theorems[q_num - 1].clone();
+                let formula = intro_transitivity(theorem_p.body, theorem_q.body).unwrap();
+                self.push_theorem(Theorem::new(
+                    formula,
+                    Justification::Transivity(p_num, q_num),
+                ));
+                self.list_last_theorem();
+            }
+            ["induction", p, q] => {
+                let p_num = p.parse::<usize>().unwrap();
+                let theorem_p = self.theorems[p_num - 1].clone();
+                let q_num = q.parse::<usize>().unwrap();
+                let theorem_q = self.theorems[q_num - 1].clone();
+                let formula = intro_induction(theorem_p.body, theorem_q.body).unwrap();
+                self.push_theorem(Theorem::new(
+                    formula,
+                    Justification::Induction(p_num, q_num),
+                ));
+                self.list_last_theorem();
+            }
             ["axiom", n_str] => {
                 let n: usize = n_str.parse().map_err(|_| "Expected n to be a integer")?;
                 match intro_axiom(n) {
@@ -170,12 +288,11 @@ impl Repl {
                     Err(e) => return Err(e.to_string()),
                 }
             }
-            _ => return Err("Unknown or malformed command".to_string()),
+            _ => return Err("Unknown command".to_string()),
         }
         Ok(())
     }
 
-    // TODO: Split run into actual repl loop and run line with String
     pub fn run(&mut self) {
         let mut command = String::new();
         while !self.should_quit {
@@ -192,7 +309,10 @@ impl Repl {
     }
 
     fn print_help(&self) {
-        todo!();
+        println!("help");
+        println!("axiom <n>");
+        println!("intro and <line number> <line number>");
+        println!("elim and <line number> <l or r>");
     }
 
     fn list_theorems(&self) {

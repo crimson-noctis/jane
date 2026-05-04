@@ -177,13 +177,13 @@ pub fn intro_conjunction(p: Formula, q: Formula) -> Formula {
     new_and(p, q)
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum Choice {
     Left,
     Right,
 }
 
-fn elim_conjunction(f: Formula, n: Choice) -> Result<Formula, String> {
+pub fn elim_conjunction(f: Formula, n: Choice) -> Result<Formula, String> {
     if let Formula::And { left, right } = f {
         match n {
             Choice::Left => Ok(*left),
@@ -194,8 +194,8 @@ fn elim_conjunction(f: Formula, n: Choice) -> Result<Formula, String> {
     }
 }
 
-fn intro_implication() {
-    todo!();
+pub fn intro_implication(p: Formula, q: Formula) -> Formula {
+    new_implies(p, q)
 }
 
 fn term_equal(a: Term, b: Term) -> bool {
@@ -206,7 +206,7 @@ fn formula_equal(a: Formula, b: Formula) -> bool {
     a == b
 }
 
-fn elim_implication(p: Formula, f: Formula) -> Result<Formula, String> {
+pub fn elim_implication(p: Formula, f: Formula) -> Result<Formula, String> {
     if let Formula::Implies { left, right } = f {
         if formula_equal(p, *left) {
             Ok(*right)
@@ -218,15 +218,18 @@ fn elim_implication(p: Formula, f: Formula) -> Result<Formula, String> {
     }
 }
 
-fn intro_symmetry(p: Formula) -> Result<Formula, String> {
+pub fn intro_symmetry(p: Formula) -> Result<Formula, String> {
     if let Formula::Atom { left, right } = p {
-        Ok(Formula::Atom { right, left })
+        Ok(Formula::Atom {
+            left: right,
+            right: left,
+        })
     } else {
         Err("Symmetry: Formula must be an atom of the form (p = q)".to_string())
     }
 }
 
-fn intro_transitivity(p: Formula, q: Formula) -> Result<Formula, String> {
+pub fn intro_transitivity(p: Formula, q: Formula) -> Result<Formula, String> {
     if let (
         Formula::Atom {
             left: p_left,
@@ -251,7 +254,7 @@ fn intro_transitivity(p: Formula, q: Formula) -> Result<Formula, String> {
     }
 }
 
-fn intro_succ(p: Formula) -> Result<Formula, String> {
+pub fn intro_succ(p: Formula) -> Result<Formula, String> {
     if let Formula::Atom { left, right } = p {
         Ok(Formula::Atom {
             left: Term::Succ {
@@ -266,7 +269,7 @@ fn intro_succ(p: Formula) -> Result<Formula, String> {
     }
 }
 
-fn elim_succ(p: Formula) -> Result<Formula, String> {
+pub fn elim_succ(p: Formula) -> Result<Formula, String> {
     if let Formula::Atom {
         left: Term::Succ { child: left_child },
         right: Term::Succ { child: right_child },
@@ -281,7 +284,7 @@ fn elim_succ(p: Formula) -> Result<Formula, String> {
     }
 }
 
-fn intro_contrapositive(p: Formula) -> Result<Formula, String> {
+pub fn intro_contrapositive(p: Formula) -> Result<Formula, String> {
     if let Formula::Implies { left, right } = p {
         // (¬p -> ¬q) becomes (q -> p)
         // (p -> ¬q) becomes (q -> ¬p)
@@ -302,7 +305,7 @@ fn invert(p: Formula) -> Formula {
     }
 }
 
-fn intro_de_morgan(mut p: Formula) -> Result<Formula, String> {
+pub fn intro_de_morgan(mut p: Formula) -> Result<Formula, String> {
     let mut was_inverted = false;
     if let Formula::Negation { child: inner } = p {
         p = *inner;
@@ -432,11 +435,11 @@ fn replace_term_with_var_in_term(t: Term, v: char, p: Term) -> Term {
 //     new_exists(v, replace_term_with_var_in_formula(t, v, p))
 // }
 
-fn elim_exists(p: Formula) -> Formula {
+pub fn elim_exists(p: Formula) -> Formula {
     todo!();
 }
 
-fn intro_forall(p: Formula) -> Formula {
+pub fn intro_forall(p: Formula) -> Formula {
     todo!();
 }
 
@@ -494,7 +497,7 @@ pub fn elim_forall(p: Formula, t: Term) -> Result<Formula, String> {
     }
 }
 
-fn intro_interchange(mut p: Formula) -> Result<Formula, String> {
+pub fn intro_interchange(mut p: Formula) -> Result<Formula, String> {
     let mut was_inverted = false;
     if let Formula::Negation { child: inner } = p {
         p = *inner;
@@ -987,5 +990,17 @@ mod tests {
         // Restriction: No generalization is allowed in a subproof on any
         // variable which appeared free in the subproof's premise.
         // todo!();
+    }
+
+    #[test]
+    fn test_intro_symmetry() {
+        // 0 = S0
+        let formula = new_atom(new_zero(), new_succ(new_zero()));
+        // S0 = 0
+        let expected = Ok(new_atom(new_succ(new_zero()), new_zero()));
+
+        let actual = intro_symmetry(formula);
+
+        assert_eq!(actual, expected);
     }
 }
