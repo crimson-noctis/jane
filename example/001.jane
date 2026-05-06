@@ -1,0 +1,12 @@
+axiom 3
+elim forall 1 0
+elim forall 2 b
+push
+premise (0 + b) = b
+intro succ 4
+carryover 3
+transitivity 7 6
+pop
+intro implies 5 8
+intro forall 10
+

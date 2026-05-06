@@ -1,0 +1,12 @@
+∀a: ∀b: (a + Sb) = S(a + b)        | Axiom
+∀b: (0 + Sb) = S(0 + b)            | Elim ∀ at 1 with 0
+(0 + Sb) = S(0 + b)                | Elim ∀ at 2 with b
+[                                  | 
+  (0 + b) = b                      | Premise
+  S(0 + b) = Sb                    | Intro successor at 4
+  (0 + Sb) = S(0 + b)              | Carry over line 3
+  (0 + Sb) = Sb                    | Transitivity of 7 and 6
+]                                  |
+((0 + b) = b -> (0 + Sb) = Sb)     | Intro -> with 5 and 8
+∀b: ((0 + b) = b -> (0 + Sb) = Sb) | Intro ∀ from 10
+
