@@ -6,7 +6,7 @@ use std::fs;
 
 fn main_repl() {
     let mut repl = Repl::new();
-    repl.run_examples();
+    // repl.run_examples();
     repl.run();
 }
 

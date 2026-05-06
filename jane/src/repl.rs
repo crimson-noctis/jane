@@ -138,6 +138,10 @@ impl Repl {
         self.theorems.push(t);
     }
 
+    fn undo(&mut self) {
+        self.theorems.pop();
+    }
+
     pub fn run_examples(&mut self) {
         self.push_theorem(Theorem::new(intro_axiom(1).unwrap(), Justification::Axiom));
 
@@ -181,7 +185,7 @@ impl Repl {
             ["quit" | "q"] => self.should_quit = true,
             ["list" | "ls"] => self.list_theorems(),
             ["help" | "commands"] => self.print_help(),
-            ["undo"] => todo!("undo"),
+            ["undo"] => self.undo(),
             ["axiom" | "axioms"] => println!("{}\n", list_axioms().join("\n")),
             ["push"] => {
                 println!("[");
@@ -195,6 +199,7 @@ impl Repl {
             }
             // Tactics
             ["premise", rest @ ..] => {
+                // TODO: Add restrictions
                 if rest.is_empty() {
                     return Err("Usage: premise <formula>".to_string());
                 }
@@ -206,6 +211,7 @@ impl Repl {
                 });
                 self.list_last_theorem();
             }
+            ["carryover"] => todo!("carryover"),
             ["intro", "and" | "conjunction", p, q] | ["joining", p, q] => {
                 let p_num = p.parse::<usize>().unwrap();
                 let theorem_p = self.theorems[p_num - 1].clone();
@@ -247,6 +253,11 @@ impl Repl {
                 self.push_theorem(Theorem::new(formula, Justification::ElimSucc(p_num)));
                 self.list_last_theorem();
             }
+            ["intro", "not" | "negation"] => todo!("intro negation"),
+            ["elim", "not" | "negation"] => todo!("elim negation"),
+            ["intro", "implies"] => todo!("intro implies"),
+            ["elim", "implies"] => todo!("elim implies"),
+            ["demorgan"] => todo!("demorgan"),
             ["symmetry", p] => {
                 let p_num = p.parse::<usize>().unwrap();
                 let theorem_p = self.theorems[p_num - 1].clone();
@@ -254,7 +265,7 @@ impl Repl {
                 self.push_theorem(Theorem::new(formula, Justification::Symmetry(p_num)));
                 self.list_last_theorem();
             }
-            ["transivity", p, q] => {
+            ["transitivity", p, q] => {
                 let p_num = p.parse::<usize>().unwrap();
                 let theorem_p = self.theorems[p_num - 1].clone();
                 let q_num = q.parse::<usize>().unwrap();

@@ -286,10 +286,6 @@ pub fn elim_succ(p: Formula) -> Result<Formula, String> {
 
 pub fn intro_contrapositive(p: Formula) -> Result<Formula, String> {
     if let Formula::Implies { left, right } = p {
-        // (¬p -> ¬q) becomes (q -> p)
-        // (p -> ¬q) becomes (q -> ¬p)
-        // (¬p -> q) becomes (¬q -> p)
-        // (p -> q) becomes (¬q -> ¬p)
         Ok(new_implies(invert(*right), invert(*left)))
     } else {
         Err("Intro contrapositive: Formula must be an implication".to_string())
@@ -324,14 +320,25 @@ pub fn intro_de_morgan(mut p: Formula) -> Result<Formula, String> {
     Ok(p)
 }
 
+pub fn intro_material_implication(p: Formula) -> Result<Formula, String> {
+    if let Formula::Or { left, right } = p {
+        Ok(new_implies(invert(*left), *right))
+    } else if let Formula::Implies { left, right } = p {
+        Ok(new_or(invert(*left), *right))
+    } else {
+        Err("err".to_string())
+    }
+}
+
+// `p` is the base case and `q` is the inductive step
 pub fn intro_induction(p: Formula, q: Formula) -> Result<Formula, String> {
-    let Formula::ForAll { var, body } = p else {
+    let Formula::ForAll { var, body } = q else {
         return Err("Formula s must be of the form ∀a: ⟨p ⊃ q⟩".to_string());
     };
     let Formula::Implies { left, right } = *body else {
         return Err("Body must be an implication".to_string());
     };
-    return Err("Body must be an implication".to_string());
+    Ok(new_forall(var, *left))
 }
 
 #[rustfmt::skip]
@@ -516,35 +523,14 @@ pub fn intro_interchange(mut p: Formula) -> Result<Formula, String> {
     Ok(p)
 }
 
+fn new_self_equal_atom(ch: char) -> Formula {
+    new_atom(new_var(ch), new_var(ch))
+}
+
 #[cfg(test)]
-mod tests {
-    use crate::ast::Formula;
-    use crate::ast::Term;
-    use crate::ast::elim_forall;
-    use crate::ast::elim_succ;
-    use crate::ast::intro_contrapositive;
-    use crate::ast::intro_de_morgan;
-    use crate::ast::intro_interchange;
-    use crate::ast::intro_succ;
-    use crate::ast::intro_symmetry;
-    use crate::ast::intro_transitivity;
-    use crate::ast::new_and;
-    use crate::ast::new_atom;
-    use crate::ast::new_exists;
-    use crate::ast::new_forall;
-    use crate::ast::new_implies;
-    use crate::ast::new_negation;
-    use crate::ast::new_or;
-    use crate::ast::new_succ;
-    use crate::ast::new_sum;
-    use crate::ast::new_var;
-    use crate::ast::new_zero;
+mod test_printing {
+    use crate::ast::*;
 
-    fn new_self_equal_atom(ch: char) -> Formula {
-        new_atom(new_var(ch), new_var(ch))
-    }
-
-    #[test]
     fn test_print_zero() {
         let zero_term = Term::Zero;
 
@@ -589,13 +575,25 @@ mod tests {
     }
 
     #[test]
+    fn test_print_sum() {
+        let sum_term = new_sum(new_var('a'), new_var('b'));
+        let expected = "(a + b)".to_string();
+        let actual = sum_term.to_string();
+
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn test_print_product() {
+        let product_term = new_product(new_var('a'), new_var('b'));
+        let expected = "(a × b)".to_string();
+        let actual = product_term.to_string();
+
+        assert_eq!(actual, expected);
+    }
+    #[test]
     fn test_print_sum_of_zero_and_one() {
-        let sum_term = Term::Sum {
-            left: Box::new(Term::Zero),
-            right: Box::new(Term::Succ {
-                child: Box::new(Term::Zero),
-            }),
-        };
+        let sum_term = new_sum(new_zero(), new_succ(new_zero()));
 
         let expected = "(0 + S0)".to_string();
         let actual = sum_term.to_string();
@@ -605,64 +603,27 @@ mod tests {
 
     #[test]
     fn test_print_product_of_one_and_one() {
-        let prod_term = Term::Product {
-            left: Box::new(Term::Succ {
-                child: Box::new(Term::Zero),
-            }),
-
-            right: Box::new(Term::Succ {
-                child: Box::new(Term::Zero),
-            }),
-        };
+        let prod_term = new_product(new_succ(new_zero()), new_succ(new_zero()));
 
         let expected = "(S0 × S0)".to_string();
         let actual = prod_term.to_string();
 
         assert_eq!(actual, expected)
     }
+}
 
-    #[test]
-    fn test_equality_of_formulas() {
-        let form_one = Formula::Atom {
-            left: Term::Zero,
-            right: Term::Succ {
-                child: Box::new(Term::Zero),
-            },
-        };
+#[cfg(test)]
+mod tests {
+    use crate::ast::*;
 
-        let form_two = Formula::Atom {
-            left: Term::Zero,
-            right: Term::Zero,
-        };
-
-        let expected = false;
-        let actual = form_one == form_two;
-
-        assert_eq!(actual, expected);
-    }
-
-    #[test]
     fn test_intro_transitivity_success() {
         // (a = Sb)
-        let form_one = Formula::Atom {
-            left: Term::Var { var: 'a' },
-            right: Term::Succ {
-                child: Box::new(Term::Var { var: 'b' }),
-            },
-        };
+        let form_one = new_atom(new_var('a'), new_succ(new_var('b')));
 
         // (Sb = c)
-        let form_two = Formula::Atom {
-            left: Term::Succ {
-                child: Box::new(Term::Var { var: 'b' }),
-            },
-            right: Term::Var { var: 'c' },
-        };
+        let form_two = new_atom(new_succ(new_var('b')), new_var('c'));
 
-        let expected = Ok(Formula::Atom {
-            left: Term::Var { var: 'a' },
-            right: Term::Var { var: 'c' },
-        });
+        let expected = Ok(new_atom(new_var('a'), new_var('c')));
 
         // (a = c)
         let actual = intro_transitivity(form_one, form_two);
@@ -673,18 +634,10 @@ mod tests {
     #[test]
     fn test_intro_transitivity_fail() {
         // (a = Sb)
-        let form_one = Formula::Atom {
-            left: Term::Var { var: 'a' },
-            right: Term::Succ {
-                child: Box::new(Term::Var { var: 'b' }),
-            },
-        };
+        let form_one = new_atom(new_var('a'), new_succ(new_var('b')));
 
         // (b = c)
-        let form_two = Formula::Atom {
-            left: Term::Var { var: 'b' },
-            right: Term::Var { var: 'c' },
-        };
+        let form_two = new_atom(new_var('b'), new_var('c'));
 
         let actual = intro_transitivity(form_one, form_two);
 
@@ -694,24 +647,13 @@ mod tests {
     #[test]
     fn test_intro_succ_success() {
         // (a = Sb)
-        let form_one = Formula::Atom {
-            left: Term::Var { var: 'a' },
-            right: Term::Succ {
-                child: Box::new(Term::Var { var: 'b' }),
-            },
-        };
+        let form_one = new_atom(new_var('a'), new_succ(new_var('b')));
 
         // (Sa = SSb)
-        let expected = Ok(Formula::Atom {
-            left: Term::Succ {
-                child: Box::new(Term::Var { var: 'a' }),
-            },
-            right: Term::Succ {
-                child: Box::new(Term::Succ {
-                    child: Box::new(Term::Var { var: 'b' }),
-                }),
-            },
-        });
+        let expected = Ok(new_atom(
+            new_succ(new_var('a')),
+            new_succ(new_succ(new_var('b'))),
+        ));
 
         let actual = intro_succ(form_one);
 
@@ -721,24 +663,10 @@ mod tests {
     #[test]
     fn test_elim_succ_success() {
         // (Sa = SSb)
-        let form_one = Formula::Atom {
-            left: Term::Succ {
-                child: Box::new(Term::Var { var: 'a' }),
-            },
-            right: Term::Succ {
-                child: Box::new(Term::Succ {
-                    child: Box::new(Term::Var { var: 'b' }),
-                }),
-            },
-        };
+        let form_one = new_atom(new_succ(new_var('a')), new_succ(new_succ(new_var('b'))));
 
         // (a = Sb)
-        let expected = Ok(Formula::Atom {
-            left: Term::Var { var: 'a' },
-            right: Term::Succ {
-                child: Box::new(Term::Var { var: 'b' }),
-            },
-        });
+        let expected = Ok(new_atom(new_var('a'), new_succ(new_var('b'))));
 
         let actual = elim_succ(form_one);
 
@@ -748,104 +676,258 @@ mod tests {
     #[test]
     fn test_elim_succ_fail() {
         // (a = Sb)
-        let form_one = Formula::Atom {
-            left: Term::Var { var: 'a' },
-            right: Term::Succ {
-                child: Box::new(Term::Var { var: 'b' }),
-            },
-        };
+        let form_one = new_atom(new_var('a'), new_succ(new_var('b')));
 
         let actual = elim_succ(form_one);
 
         assert!(actual.is_err());
     }
+}
+
+#[cfg(test)]
+mod contrapositive_tests {
+    use crate::ast::*;
 
     #[test]
-    fn test_intro_contrapositive_one_success() {
-        let form_one = new_implies(
-            new_atom(new_var('a'), new_var('a')),
-            new_atom(new_var('b'), new_var('b')),
-        );
+    fn test_intro_contrapositive_one() {
+        let atom_x = new_self_equal_atom('x');
+        let atom_y = new_self_equal_atom('y');
+        // x ->  y
+        let formula = new_implies(atom_x.clone(), atom_y.clone());
 
-        let expected = Ok(new_implies(
-            new_negation(new_atom(new_var('b'), new_var('b'))),
-            new_negation(new_atom(new_var('a'), new_var('a'))),
-        ));
+        // ~y -> ~x
+        let expected = Ok(new_implies(new_negation(atom_y), new_negation(atom_x)));
 
-        let actual = intro_contrapositive(form_one);
+        let actual = intro_contrapositive(formula);
 
         assert_eq!(actual, expected);
     }
 
     #[test]
-    fn test_intro_contrapositive_two_success() {
-        let form_one = new_implies(
-            new_negation(new_atom(new_var('b'), new_var('b'))),
-            new_negation(new_atom(new_var('a'), new_var('a'))),
-        );
+    fn test_intro_contrapositive_two() {
+        let atom_x = new_self_equal_atom('x');
+        let atom_y = new_self_equal_atom('y');
+        // ~x ->  y
+        let formula = new_implies(new_negation(atom_x.clone()), atom_y.clone());
 
-        let expected = Ok(new_implies(
-            new_atom(new_var('a'), new_var('a')),
-            new_atom(new_var('b'), new_var('b')),
-        ));
+        // ~y ->  x
+        let expected = Ok(new_implies(new_negation(atom_y), atom_x));
 
-        let actual = intro_contrapositive(form_one);
+        let actual = intro_contrapositive(formula);
 
         assert_eq!(actual, expected);
     }
 
     #[test]
-    fn test_intro_contrapositive_three_success() {
-        let form_one = new_implies(
-            new_atom(new_var('b'), new_var('b')),
-            new_negation(new_atom(new_var('a'), new_var('a'))),
-        );
+    fn test_intro_contrapositive_three() {
+        let atom_x = new_self_equal_atom('x');
+        let atom_y = new_self_equal_atom('y');
+        // x -> ~y
+        let formula = new_implies(atom_x.clone(), new_negation(atom_y.clone()));
 
-        let expected = Ok(new_implies(
-            new_atom(new_var('a'), new_var('a')),
-            new_negation(new_atom(new_var('b'), new_var('b'))),
-        ));
+        // y -> ~x
+        let expected = Ok(new_implies(atom_y, new_negation(atom_x)));
 
-        let actual = intro_contrapositive(form_one);
+        let actual = intro_contrapositive(formula);
 
         assert_eq!(actual, expected);
     }
 
     #[test]
-    fn test_intro_contrapositive_four_success() {
-        let form_one = new_implies(
-            new_negation(new_atom(new_var('b'), new_var('b'))),
-            new_atom(new_var('a'), new_var('a')),
-        );
+    fn test_intro_contrapositive_four() {
+        let atom_x = new_self_equal_atom('x');
+        let atom_y = new_self_equal_atom('y');
+        // ~x -> ~y
+        let formula = new_implies(new_negation(atom_x.clone()), new_negation(atom_y.clone()));
 
-        let expected = Ok(new_implies(
-            new_negation(new_atom(new_var('a'), new_var('a'))),
-            new_atom(new_var('b'), new_var('b')),
-        ));
+        // y ->  x
+        let expected = Ok(new_implies(atom_y, atom_x));
 
-        let actual = intro_contrapositive(form_one);
+        let actual = intro_contrapositive(formula);
 
         assert_eq!(actual, expected);
     }
 
     #[test]
-    fn test_intro_contrapositive_success_fail() {
-        let form_one = new_and(
-            new_atom(new_var('b'), new_var('b')),
-            new_negation(new_atom(new_var('a'), new_var('a'))),
-        );
+    fn test_intro_contrapositive_fail() {
+        let atom_a = new_self_equal_atom('a');
+        let atom_b = new_self_equal_atom('b');
+        let formula = new_and(atom_b, new_negation(atom_a));
 
-        let actual = intro_contrapositive(form_one);
+        let actual = intro_contrapositive(formula);
 
         assert!(actual.is_err());
     }
+}
+
+#[cfg(test)]
+mod material_implication_tests {
+    use crate::ast::*;
 
     #[test]
-    fn test_intro_de_morgan_one_success() {
-        let formula = new_and(new_self_equal_atom('a'), new_self_equal_atom('b'));
+    fn test_material_implication_one() {
+        let atom_x = new_self_equal_atom('x');
+        let atom_y = new_self_equal_atom('y');
+        // x | y
+        let formula = new_or(atom_x.clone(), atom_y.clone());
+        // ~x -> y
+        let expected = Ok(new_implies(new_negation(atom_x), atom_y));
+        let actual = intro_material_implication(formula);
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn test_material_implication_two() {
+        let atom_x = new_self_equal_atom('x');
+        let atom_y = new_self_equal_atom('y');
+        // ~x | y
+        let formula = new_or(new_negation(atom_x.clone()), atom_y.clone());
+        // x -> y
+        let expected = Ok(new_implies(atom_x, atom_y));
+        let actual = intro_material_implication(formula);
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn test_material_implication_three() {
+        let atom_x = new_self_equal_atom('x');
+        let atom_y = new_self_equal_atom('y');
+        // x | ~y
+        let formula = new_or(atom_x.clone(), new_negation(atom_y.clone()));
+        // ~x -> ~y
+        let expected = Ok(new_implies(new_negation(atom_x), new_negation(atom_y)));
+        let actual = intro_material_implication(formula);
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn test_material_implication_four() {
+        let atom_x = new_self_equal_atom('x');
+        let atom_y = new_self_equal_atom('y');
+        // ~x | ~y
+        let formula = new_or(new_negation(atom_x.clone()), new_negation(atom_y.clone()));
+        // x -> ~y
+        let expected = Ok(new_implies(atom_x, new_negation(atom_y)));
+        let actual = intro_material_implication(formula);
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn test_material_implication_reverse_one() {
+        let atom_x = new_self_equal_atom('x');
+        let atom_y = new_self_equal_atom('y');
+        // ~x -> y
+        let formula = new_implies(new_negation(atom_x.clone()), atom_y.clone());
+        // x | y
+        let expected = Ok(new_or(atom_x, atom_y));
+        let actual = intro_material_implication(formula);
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn test_material_implication_reverse_two() {
+        let atom_x = new_self_equal_atom('x');
+        let atom_y = new_self_equal_atom('y');
+        // x -> y
+        let formula = new_implies(atom_x.clone(), atom_y.clone());
+        // ~x | y
+        let expected = Ok(new_or(new_negation(atom_x), atom_y));
+        let actual = intro_material_implication(formula);
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn test_material_implication_reverse_three() {
+        let atom_x = new_self_equal_atom('x');
+        let atom_y = new_self_equal_atom('y');
+        // ~x -> ~y
+        let formula = new_implies(new_negation(atom_x.clone()), new_negation(atom_y.clone()));
+        // x | ~y
+        let expected = Ok(new_or(atom_x, new_negation(atom_y)));
+        let actual = intro_material_implication(formula);
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn test_material_implication_reverse_four() {
+        let atom_x = new_self_equal_atom('x');
+        let atom_y = new_self_equal_atom('y');
+        // x -> ~y
+        let formula = new_implies(atom_x.clone(), new_negation(atom_y.clone()));
+        // ~x | ~y
+        let expected = Ok(new_or(new_negation(atom_x), new_negation(atom_y)));
+        let actual = intro_material_implication(formula);
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn test_material_implication_fail() {
+        let formula = new_self_equal_atom('x');
+        let actual = intro_material_implication(formula);
+        assert!(actual.is_err());
+    }
+}
+
+#[cfg(test)]
+mod demorgan_tests {
+    use crate::ast::*;
+
+    #[test]
+    fn test_intro_de_morgan_one() {
+        let atom_x = new_self_equal_atom('x');
+        let atom_y = new_self_equal_atom('y');
+
+        // ~x ∧ ~y
+        let formula = new_and(new_negation(atom_x.clone()), new_negation(atom_y.clone()));
+        // ~(x ∨ y)
+        let expected = Ok(new_negation(new_or(atom_x, atom_y)));
+
+        let actual = intro_de_morgan(formula);
+
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn test_intro_de_morgan_two() {
+        let atom_x = new_self_equal_atom('x');
+        let atom_y = new_self_equal_atom('y');
+
+        // x ∧ ~y
+        let formula = new_and(atom_x.clone(), new_negation(atom_y.clone()));
+        // ~(~x ∨ y)
+        let expected = Ok(new_negation(new_or(new_negation(atom_x), atom_y)));
+
+        let actual = intro_de_morgan(formula);
+
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn test_intro_de_morgan_three() {
+        let atom_x = new_self_equal_atom('x');
+        let atom_y = new_self_equal_atom('y');
+
+        // ~x ∧ y
+        let formula = new_and(new_negation(atom_x.clone()), atom_y.clone());
+        // ~(x ∨ ~y)
+        let expected = Ok(new_negation(new_or(atom_x, new_negation(atom_y))));
+
+        let actual = intro_de_morgan(formula);
+
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn test_intro_de_morgan_four() {
+        let atom_x = new_self_equal_atom('x');
+        let atom_y = new_self_equal_atom('y');
+
+        // x ∧ y
+        let formula = new_and(atom_x.clone(), atom_y.clone());
+        // ~(~x ∨ ~y)
         let expected = Ok(new_negation(new_or(
-            new_negation(new_self_equal_atom('a')),
-            new_negation(new_self_equal_atom('b')),
+            new_negation(atom_x),
+            new_negation(atom_y),
         )));
 
         let actual = intro_de_morgan(formula);
@@ -854,12 +936,65 @@ mod tests {
     }
 
     #[test]
-    fn test_intro_de_morgan_two_success() {
-        let formula = new_or(new_self_equal_atom('a'), new_self_equal_atom('b'));
-        let expected = Ok(new_negation(new_and(
-            new_negation(new_self_equal_atom('a')),
-            new_negation(new_self_equal_atom('b')),
-        )));
+    fn test_intro_de_morgan_reverse_one() {
+        let atom_x = new_self_equal_atom('x');
+        let atom_y = new_self_equal_atom('y');
+
+        // ~(x ∨ y)
+        let formula = new_negation(new_or(atom_x.clone(), atom_y.clone()));
+        // ~x ∧ ~y
+        let expected = Ok(new_and(
+            new_negation(atom_x.clone()),
+            new_negation(atom_y.clone()),
+        ));
+
+        let actual = intro_de_morgan(formula);
+
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn test_intro_de_morgan_reverse_two() {
+        let atom_x = new_self_equal_atom('x');
+        let atom_y = new_self_equal_atom('y');
+
+        // ~(~x ∨ y)
+        let formula = new_negation(new_or(new_negation(atom_x.clone()), atom_y.clone()));
+        // x ∧ ~y
+        let expected = Ok(new_and(atom_x, new_negation(atom_y)));
+
+        let actual = intro_de_morgan(formula);
+
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn test_intro_de_morgan_reverse_three() {
+        let atom_x = new_self_equal_atom('x');
+        let atom_y = new_self_equal_atom('y');
+
+        // ~(x ∨ ~y)
+        let formula = new_negation(new_or(atom_x.clone(), new_negation(atom_y.clone())));
+        // ~x ∧ y
+        let expected = Ok(new_and(new_negation(atom_x), atom_y));
+
+        let actual = intro_de_morgan(formula);
+
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn test_intro_de_morgan_reverse_four() {
+        let atom_x = new_self_equal_atom('x');
+        let atom_y = new_self_equal_atom('y');
+
+        // ~(~x ∨ ~y)
+        let formula = new_negation(new_or(
+            new_negation(atom_x.clone()),
+            new_negation(atom_y.clone()),
+        ));
+        // x ∧ y
+        let expected = Ok(new_and(atom_x, atom_y));
 
         let actual = intro_de_morgan(formula);
 
@@ -868,13 +1003,20 @@ mod tests {
 
     #[test]
     fn test_intro_de_morgan_fail() {
-        // (a = a) -> (b = b)
-        let formula = new_implies(new_self_equal_atom('a'), new_self_equal_atom('b'));
+        let atom_x = new_self_equal_atom('x');
+        let atom_y = new_self_equal_atom('y');
+        // x -> y
+        let formula = new_implies(atom_x, atom_y);
 
         let actual = intro_de_morgan(formula);
 
         assert!(actual.is_err());
     }
+}
+
+#[cfg(test)]
+mod other_tests {
+    use crate::ast::*;
 
     #[test]
     fn test_interchange_not_exists_to_forall_not_success() {
@@ -1000,6 +1142,55 @@ mod tests {
         let expected = Ok(new_atom(new_succ(new_zero()), new_zero()));
 
         let actual = intro_symmetry(formula);
+
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn test_induction() {
+        // Ac: (c + 0) = (0 + c)
+        let formula_one = new_forall(
+            'c',
+            new_atom(
+                new_sum(new_var('c'), new_zero()),
+                new_sum(new_zero(), new_var('c')),
+            ),
+        );
+
+        // ∀d: (Vc: (c + d) = (d + c) -> Vc: (c + Sd) = (Sd + c))
+        let formula_two = new_forall(
+            'd',
+            new_implies(
+                new_forall(
+                    'c',
+                    new_atom(
+                        new_sum(new_var('c'), new_var('d')),
+                        new_sum(new_var('d'), new_var('c')),
+                    ),
+                ),
+                new_forall(
+                    'c',
+                    new_atom(
+                        new_sum(new_var('c'), new_succ(new_var('d'))),
+                        new_sum(new_succ(new_var('d')), new_var('c')),
+                    ),
+                ),
+            ),
+        );
+
+        // ∀d: (Vc: (c + d) = (d + c))
+        let expected = Ok(new_forall(
+            'd',
+            new_forall(
+                'c',
+                new_atom(
+                    new_sum(new_var('c'), new_var('d')),
+                    new_sum(new_var('d'), new_var('c')),
+                ),
+            ),
+        ));
+
+        let actual = intro_induction(formula_one, formula_two);
 
         assert_eq!(actual, expected);
     }
