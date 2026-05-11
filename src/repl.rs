@@ -2,27 +2,16 @@ use std::fmt::Display;
 use std::io;
 use std::io::Write;
 
-use jane::ast::Choice;
-use jane::ast::Formula;
-use jane::ast::Term;
-use jane::ast::elim_conjunction;
-use jane::ast::elim_forall;
-use jane::ast::elim_succ;
-use jane::ast::intro_axiom;
-use jane::ast::intro_conjunction;
-use jane::ast::intro_induction;
-use jane::ast::intro_succ;
-use jane::ast::intro_symmetry;
-use jane::ast::intro_transitivity;
-use jane::ast::list_axioms;
-use jane::ast::new_succ;
-use jane::ast::new_zero;
-use jane::lexer::Lexer;
-use jane::parser::Parser;
+use crate::{
+    ast::{
+        Choice, Formula, Term, elim_conjunction, elim_forall, elim_succ, intro_axiom,
+        intro_conjunction, intro_induction, intro_succ, intro_symmetry, intro_transitivity,
+        list_axioms, new_succ, new_zero,
+    },
+    lexer::Lexer,
+    parser::Parser,
+};
 
-// TODO: Undo
-// TODO: Help
-// TODO: Tactics
 // TODO: Readline support
 
 #[derive(Debug, Clone)]
@@ -173,43 +162,52 @@ impl Repl {
         ));
     }
 
-    fn process_command(&mut self, cmd: &str) -> Result<(), String> {
+    pub fn process_command(&mut self, cmd: &str) -> Result<String, String> {
         let tokens: Vec<&str> = cmd.split_whitespace().collect();
 
         if tokens.is_empty() {
-            return Ok(());
+            return Ok("".to_string());
         }
 
-        match tokens.as_slice() {
+        return match tokens.as_slice() {
             // CLI commands
-            ["quit" | "q"] => self.should_quit = true,
-            ["list" | "ls"] => self.list_theorems(),
-            ["help" | "commands"] => self.print_help(),
-            ["undo"] => self.undo(),
-            ["axiom" | "axioms"] => println!("{}\n", list_axioms().join("\n")),
+            ["quit" | "q"] => {
+                self.should_quit = true;
+                Ok(String::new())
+            }
+            ["list" | "ls"] => Ok(self.list_theorems()),
+            ["help" | "commands"] => Ok(self.print_help()),
+            ["undo"] => {
+                self.undo();
+                Ok(String::new())
+            }
+            ["axiom" | "axioms"] => Ok(format!("{}\n", list_axioms().join("\n"))),
             ["push"] => {
-                println!("[");
                 self.indentation_level += 1;
+                Ok(format!("["))
             }
             ["pop"] => {
                 if self.indentation_level > 0 {
-                    println!("]");
                     self.indentation_level -= 1;
+                    Ok(format!("]"))
+                } else {
+                    Err("Nothing to pop from".to_string())
                 }
             }
             // Tactics
             ["premise", rest @ ..] => {
                 // TODO: Add restrictions
                 if rest.is_empty() {
-                    return Err("Usage: premise <formula>".to_string());
+                    Err("Usage: premise <formula>".to_string())
+                } else {
+                    let formula_str = rest.join(" ");
+                    let formula = parse_str_to_formula(&formula_str);
+                    self.push_theorem(Theorem {
+                        body: formula,
+                        reason: Justification::Premise,
+                    });
+                    Ok(self.list_last_theorem())
                 }
-                let formula_str = rest.join(" ");
-                let formula = parse_str_to_formula(&formula_str);
-                self.push_theorem(Theorem {
-                    body: formula,
-                    reason: Justification::Premise,
-                });
-                self.list_last_theorem();
             }
             ["carryover"] => todo!("carryover"),
             ["intro", "and" | "conjunction", p, q] | ["joining", p, q] => {
@@ -222,7 +220,7 @@ impl Repl {
                     formula,
                     Justification::IntroConjunction(p_num, q_num),
                 ));
-                self.list_last_theorem();
+                Ok(self.list_last_theorem())
             }
             ["elim", "and" | "conjunction", p, c] | ["seperation", p, c] => {
                 let choice = match *c {
@@ -237,21 +235,21 @@ impl Repl {
                     formula,
                     Justification::ElimConjunction(p_num, choice),
                 ));
-                self.list_last_theorem();
+                Ok(self.list_last_theorem())
             }
             ["intro" | "add", "succ", p] => {
                 let p_num = p.parse::<usize>().unwrap();
                 let theorem_p = self.theorems[p_num - 1].clone();
                 let formula = intro_succ(theorem_p.body).unwrap();
                 self.push_theorem(Theorem::new(formula, Justification::IntroSucc(p_num)));
-                self.list_last_theorem();
+                Ok(self.list_last_theorem())
             }
             ["elim" | "drop", "succ", p] => {
                 let p_num = p.parse::<usize>().unwrap();
                 let theorem_p = self.theorems[p_num - 1].clone();
                 let formula = elim_succ(theorem_p.body).unwrap();
                 self.push_theorem(Theorem::new(formula, Justification::ElimSucc(p_num)));
-                self.list_last_theorem();
+                Ok(self.list_last_theorem())
             }
             ["intro", "not" | "negation"] => todo!("intro negation"),
             ["elim", "not" | "negation"] => todo!("elim negation"),
@@ -263,7 +261,7 @@ impl Repl {
                 let theorem_p = self.theorems[p_num - 1].clone();
                 let formula = intro_symmetry(theorem_p.body.clone()).unwrap();
                 self.push_theorem(Theorem::new(formula, Justification::Symmetry(p_num)));
-                self.list_last_theorem();
+                Ok(self.list_last_theorem())
             }
             ["transitivity", p, q] => {
                 let p_num = p.parse::<usize>().unwrap();
@@ -275,7 +273,7 @@ impl Repl {
                     formula,
                     Justification::Transivity(p_num, q_num),
                 ));
-                self.list_last_theorem();
+                Ok(self.list_last_theorem())
             }
             ["induction", p, q] => {
                 let p_num = p.parse::<usize>().unwrap();
@@ -287,21 +285,20 @@ impl Repl {
                     formula,
                     Justification::Induction(p_num, q_num),
                 ));
-                self.list_last_theorem();
+                Ok(self.list_last_theorem())
             }
             ["axiom", n_str] => {
                 let n: usize = n_str.parse().map_err(|_| "Expected n to be a integer")?;
                 match intro_axiom(n) {
                     Ok(axiom) => {
                         self.push_theorem(Theorem::new(axiom, Justification::Axiom));
-                        self.list_last_theorem();
+                        Ok(self.list_last_theorem())
                     }
                     Err(e) => return Err(e.to_string()),
                 }
             }
             _ => return Err("Unknown command".to_string()),
-        }
-        Ok(())
+        };
     }
 
     pub fn run(&mut self) {
@@ -313,35 +310,66 @@ impl Repl {
             io::stdin()
                 .read_line(&mut command)
                 .expect("Failed to read line");
-            if let Err(err) = self.process_command(&command) {
-                println!("ERROR: {}", err);
+            // if let Err(err) = self.process_command(&command) {
+            // println!("ERROR: {}", err);
+            // }
+            match self.process_command(&command) {
+                Ok(s) => println!("{}", s),
+                Err(err) => println!("ERROR: {}", err),
             }
         }
     }
 
-    fn print_help(&self) {
-        println!("help");
-        println!("axiom <n>");
-        println!("intro and <line number> <line number>");
-        println!("elim and <line number> <l or r>");
+    pub fn should_quit(&self) -> bool {
+        self.should_quit
     }
 
-    fn list_theorems(&self) {
+    fn print_help(&self) -> String {
+        let mut help = String::new();
+        help.push_str("Available commands:\n");
+        help.push_str("  help, commands       Show this help message\n");
+        help.push_str("  list, ls             List all theorems in the current proof\n");
+        help.push_str("  undo                 Remove the last theorem added\n");
+        help.push_str("  axiom, axioms        List all available axioms\n");
+        help.push_str("  axiom <n>            Introduce axiom <n> into the proof\n");
+        help.push_str("  push                 Start a subproof (increases indentation)\n");
+        help.push_str("  pop                  End a subproof (decreases indentation)\n");
+        help.push_str("  quit, q              Exit the REPL\n");
+        help.push_str("\nProof tactics:\n");
+        help.push_str("  premise <formula>    Introduce a premise\n");
+        help.push_str("  intro and <l1> <l2>  Introduction of conjunction (joining)\n");
+        help.push_str("  elim and <l> <c>     Elimination of conjunction (separation). choice is 'l' or 'r'\n");
+        help.push_str("  intro succ <l>       Introduction of successor (add succ)\n");
+        help.push_str("  elim succ <l>        Elimination of successor (drop succ)\n");
+        help.push_str("  symmetry <l>         Symmetry of equality\n");
+        help.push_str("  transitivity <l1> <l2> Transitivity of equality\n");
+        help.push_str("  induction <l1> <l2>  Mathematical induction\n");
+        help
+    }
+
+    fn list_theorems(&self) -> String {
+        let mut str = String::new();
         for (i, Theorem { body, reason }) in self.theorems.iter().enumerate() {
             let left = format!("{}: {}", i + 1, body);
-            println!("{:width$} | {}", left, reason, width = self.max_width);
+            str.push_str(&format!(
+                "{:width$} | {}\n",
+                left,
+                reason,
+                width = self.max_width
+            ));
         }
 
-        println!();
+        str.push('\n');
+        str
     }
 
-    fn list_last_theorem(&self) {
+    fn list_last_theorem(&self) -> String {
         let Some((i, Theorem { body, reason })) = self.theorems.iter().enumerate().next_back()
         else {
-            return;
+            return String::new();
         };
         let left = format!("{}: {}", i + 1, body);
-        println!("{:width$} | {}\n", left, reason, width = self.max_width);
+        format!("{:width$} | {}\n", left, reason, width = self.max_width)
     }
 }
 

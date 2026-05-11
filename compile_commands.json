@@ -1,0 +1,15 @@
+[
+  {
+    "file": "main.c",
+    "arguments": [
+      "/Users/antallis/.swiftly/bin/clang",
+      "-Wall",
+      "-Wextra",
+      "main.c",
+      "-o",
+      "main"
+    ],
+    "directory": "/Users/antallis/Workspace/github.com/crimson-noctis/jane/jane",
+    "output": "main"
+  }
+]
